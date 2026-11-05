@@ -11,7 +11,7 @@ RUN
 
 MODELS
   mlist             Which bundles are installed / missing
-  mget <ids>        Download bundles, e.g. mget qwen h3-turbo
+  mget <ids>        Download bundles, comma-separated: mget qwen,h3-turbo
 
 DEVELOP
   tc                Typecheck (src, server, mcp)
