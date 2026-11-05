@@ -1,0 +1,30 @@
+SETUP
+  install           npm install + rebuild better-sqlite3 native module
+  sqlfix            Rebuild better-sqlite3 only (after any reinstall)
+  doctor            Check Node, ComfyUI, models, ffmpeg, output folder
+
+RUN
+  run               Dev server + UI (open http://localhost:3160)
+  build             Typecheck + production build
+  prod              Build, then serve UI and API on :3161
+  ui                Open the UI in the default browser
+
+MODELS
+  mlist             Which bundles are installed / missing
+  mget <ids>        Download bundles, e.g. mget qwen h3-turbo
+
+DEVELOP
+  tc                Typecheck (src, server, mcp)
+  checks            Run all no-GPU checks, stop at first failure
+  wf                Regenerate workflows/ from the graph builders
+  mdocs             Regenerate docs/MODELS.md from server/models.ts
+  mcp               Start the MCP server
+
+COMFYUI (systemd)
+  cstart / cstop    Start / stop ComfyUI
+  crestart          Restart (needed after adding models)
+  cstatus           Service status
+  clog / clogf      Last 50 log lines / follow log
+
+GIT
+  sync              Merge the original project's main into this fork

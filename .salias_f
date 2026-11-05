@@ -1,0 +1,51 @@
+# OpenField - Project aliases and functions
+# All commands defined here, sourced by .salias
+# Run 'help' to see all available commands
+
+# ── Help ──
+function help
+    clear
+    cat ./.salias_help.txt
+end
+
+# ── Setup ──
+# npm's ignore-scripts=true skips better-sqlite3's install script, so rebuild it explicitly.
+function install
+    npm install; and npm rebuild better-sqlite3 --ignore-scripts=false
+end
+alias sqlfix='npm rebuild better-sqlite3 --ignore-scripts=false'
+alias doctor='npm run doctor'
+
+# ── Run ──
+alias run='npm run dev'
+alias build='npm run build'
+alias prod='npm run build; and npm start'
+alias ui='xdg-open http://localhost:3160'
+
+# ── Models ──
+alias mlist='npm run models -- --list'
+alias mget='npm run models -- --only'
+
+# ── Develop ──
+alias tc='npm run typecheck'
+function checks
+    for t in test:ltxfiles test:judge test:video-decode test:model-switch test:h3-turbo test:llm-planner shotlist:check mcp:check
+        echo "── $t"
+        npm run -s $t; or begin; echo "FAILED: $t"; return 1; end
+    end
+    echo "all checks passed"
+end
+alias wf='npm run workflows'
+alias mdocs='npm run docs:models'
+alias mcp='npm run mcp'
+
+# ── ComfyUI (systemd) ──
+alias cstart='systemctl --user start comfyui'
+alias cstop='systemctl --user stop comfyui'
+alias crestart='systemctl --user restart comfyui'
+alias cstatus='systemctl --user status comfyui --no-pager'
+alias clog='journalctl --user -u comfyui --no-pager -n 50'
+alias clogf='journalctl --user -u comfyui -f'
+
+# ── Git (fork: origin = TerminatedProcess/openfield, upstream is fetch-only) ──
+alias sync='git fetch upstream; and git merge upstream/main'
