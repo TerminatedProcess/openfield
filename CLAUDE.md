@@ -1,3 +1,8 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+The first half is the install checklist (README points users here for "set up OpenField"); development notes follow it.
+
 # OpenField, for the agent doing the install
 
 You are being asked to set up OpenField on this machine. Work through the
@@ -127,3 +132,35 @@ than downloading silently past them.
 - **Do not edit `docs/MODELS.md`.** It is generated from `server/models.ts` by
   `npm run docs:models`.
 - If you change any code, `npm run typecheck` must pass before you hand back.
+
+# Developing OpenField
+
+## Commands
+
+- `npm run dev`: Fastify server (`tsx watch server/index.ts`, :3161) + Vite UI (:3160) together.
+- `npm run build` / `npm start`: typecheck + Vite build, then one process serving UI and API on :3161.
+- `npm run typecheck`: three projects (root `tsconfig.json` for `src/`, `server/tsconfig.json`, `mcp/tsconfig.json`). Must pass before handing back.
+- No test framework: each check is a standalone `tsx` script with `assert`, run individually. Most need no GPU or engine:
+  `npm run test:ltxfiles`, `test:judge`, `test:video-decode`, `test:model-switch`, `test:h3-turbo`, `test:llm-planner`,
+  `shotlist:check`, `mcp:check`. Others in `scripts/` (`test-phone.ts`, `sdk-smoke.ts`, `sse-probe.ts`) and `mcp:smoke` run via `npx tsx <file>` and may need a live server/engine.
+- `npm run workflows`: regenerate `workflows/*.json` + `workflows/README.md` from the graph builders. Deterministic; re-run after changing any builder (`test:ltxfiles` fails if the committed JSON drifts).
+- `npm run docs:models`: regenerate `docs/MODELS.md` from `server/models.ts`.
+
+## Architecture
+
+```
+src/ (React 19 + Vite) --HTTP /api, WS /live--> server/index.ts (Fastify)
+  -> server/graphs/*.ts build ComfyUI API-format graphs
+  -> server/engine.ts submits via @comfyorg/sdk (Comfy API v2)
+  -> comfy-api-proxy :8189 (auto-started) -> ComfyUI :8188
+```
+
+- **One app = one graph builder** in `server/graphs/` (pure functions returning API-format JSON). `server/index.ts` (large, ~2300 lines) holds every route; most renders go through `POST /api/generate`, plus per-feature routes (director, stage, seam, upres, hdr).
+- **Engine** (`server/engine.ts`): uploads inputs as SDK assets and returns `asset:<uuid>` tokens that builders put in loader widgets; `submit()` swaps them for SDK refs. A local copy is cached under `OPENFIELD_DATA/inputs`. Emits `progress`/`preview`/`status`/`finished`, which the server relays over `/live`.
+- **Model switching** (`server/modelSwitch.ts`) serialises jobs and unloads ComfyUI models when the next render needs a different large model; `videoDecode.ts` / `renderTier.ts` pick decode mode and default size by GPU (both mirrored in `src/`).
+- **Persistence**: SQLite (`server/jobs.ts`, `OPENFIELD_DATA/openfield.db`): takes (settings JSON so any take can be refired), projects, cast, preambles, per-take graph (`take_workflows`, served as "Open in ComfyUI"), and a speed table used by `server/estimate.ts`.
+- **Models**: `server/models.ts` `BUNDLES` is the single source of truth for filenames, sizes, licenses and bundle ids; `scripts/fetch-models.ts`, `server/preflight.ts` (which apps are blocked and why), `scripts/doctor.ts` and `docs/MODELS.md` all derive from it. LTX-2.5 filenames must go through `server/graphs/ltxfiles.ts`, never hardcoded in a builder.
+- **Frontend**: no router lib; `src/router.ts` keeps all page/picker state in the URL. One page per app in `src/pages/`; `src/api.ts` is the client + socket; `src/catalog.ts` / `src/presets.ts` hold presets shared with MCP.
+- **MCP** (`mcp/server.ts`): an MCP client of the running OpenField HTTP API. `mcp/bodies.ts` must produce byte-identical request bodies to the pages; `npm run mcp:check` extracts the literals from `src/pages/*.tsx` and fails on drift, so change both together.
+- **Judge mode** (`server/judge.ts`): password-gated hosted preview (RunPod, `deploy/runpod`, `docs/RUNPOD.md`) with a render cap; the normal server refuses foreign `Host` headers.
+- `server/phone.ts` runs a separate listener (:3162) only while a Mirror QR code is shown.
