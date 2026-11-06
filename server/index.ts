@@ -793,7 +793,11 @@ async function graphFor(b: any, seed: number): Promise<Built> {
     kind = 'video';
     const turbo = typeof b.h3Turbo === 'string' && b.h3Turbo ? b.h3Turbo : undefined;
     if (turbo) {
-      const problem = turboProblem(turbo, !!b.refImages?.length, new Set(await comfy.comboOptions('LoraLoaderModelOnly', 'lora_name')));
+      const [loras, unets] = await Promise.all([
+        comfy.comboOptions('LoraLoaderModelOnly', 'lora_name'),
+        comfy.comboOptions('UNETLoader', 'unet_name'),
+      ]);
+      const problem = turboProblem(turbo, !!b.refImages?.length, { loras: new Set(loras), unets: new Set(unets) });
       if (problem) throw new Error(problem);
     }
     graph = buildH3Graph({

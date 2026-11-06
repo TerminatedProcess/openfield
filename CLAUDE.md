@@ -121,7 +121,9 @@ than downloading silently past them.
   and a slightly different name is a missing file. The names in
   `server/models.ts` are what the graph builders ask ComfyUI for, except for the
   four LTX-2.5 files when `OPENFIELD_LTX25_*` is set in `.env`
-  (`server/graphs/ltxfiles.ts`): then the configured names count.
+  (`server/graphs/ltxfiles.ts`) and the H3 text encoder when
+  `OPENFIELD_H3_TEXT_ENCODER` is set (`server/graphs/h3.ts`): then the
+  configured names count.
 - **`COMFY_MODELS_DIR` is not necessarily where ComfyUI reads from.** ComfyUI's
   `extra_model_paths.yaml` frequently redirects model folders to another drive.
   The installer therefore asks the running engine what it can see and only falls

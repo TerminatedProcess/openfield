@@ -16,6 +16,7 @@ import { join } from 'path';
 import { ROOT } from '../server/config.js';
 import { LTX25_ENV, LTX25_STOCK, clearLtx25Overrides, ltx25Files, ltx25Overrides, type Ltx25Slot } from '../server/graphs/ltxfiles.js';
 import { buildLtx25Graph } from '../server/graphs/ltx25.js';
+import { H3_TEXT_ENCODER_ENV } from '../server/graphs/h3.js';
 import { BUNDLES, activeBundles, type Bundle } from '../server/models.js';
 import { reasonFor, statusFor } from '../server/preflight.js';
 import { ENTRIES, OUT } from './export-workflows.js';
@@ -44,8 +45,10 @@ const CUSTOM: Record<Ltx25Slot, string> = {
 };
 const setOverrides = () => { for (const s of SLOTS) process.env[LTX25_ENV[s]] = CUSTOM[s]; };
 
-// This machine's .env may set overrides; every check starts from none.
+// This machine's .env may set overrides; every check starts from none
+// (the H3 text encoder too: the committed H3 workflows name the stock one).
 clearLtx25Overrides();
+delete process.env[H3_TEXT_ENCODER_ENV];
 
 // ------------------------------------------------------------ module ----
 console.log('\nltxfiles.ts');

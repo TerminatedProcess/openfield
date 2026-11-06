@@ -34,6 +34,8 @@ export function secondsToFrames(seconds: number): number {
  * one there (4 steps regardless of the label).
  */
 export const H3_TURBO = [
+  { key: 'fasth3v2-8', label: '8-STEP · FASTH3 V2', steps: 8,
+    note: 'FastVideo FastH3 8-step V2, the merged model of ComfyUI\'s FastH3 templates. Your own LoRA still applies.' },
   { key: 'fasth3-6', label: '6-STEP · FASTH3', steps: 6,
     note: 'FastVideo DMD2 distill. ~23% faster than the 4-step lightx2v at hero res and follows the prompt harder.' },
   { key: 'v11-4', label: '4-STEP · v1.1', steps: 4,
@@ -44,17 +46,22 @@ export const H3_TURBO = [
     note: 'Closer to base quality, still ~2.5x faster than full.' },
 ] as const;
 
-/** LoRA filenames the turbo presets need present in ComfyUI's lora folder. */
+/** LoRA filenames the LoRA turbo presets need present in ComfyUI's lora folder. */
 export const H3_TURBO_FILES: Record<string, string> = {
   'fasth3-6': 'minimax_h3_fasth3_4step_dense_comfy.safetensors',
   'v11-4': 'minimax_h3_fl2v_turbo_4step_v1.1_768p_comfyui_bf16.safetensors',
   'v10-4': 'minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors',
   'v10-8': 'minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors',
 };
-/** The turbo presets whose LoRA ComfyUI lists, under exactly the name the graph asks for. */
-export const availableH3Turbo = (loras: readonly string[]) => {
-  const have = new Set(loras);
-  return H3_TURBO.filter((t) => have.has(H3_TURBO_FILES[t.key]));
+/** Diffusion models (models/diffusion_models/) the whole-model turbo presets load instead of a LoRA. */
+export const H3_TURBO_UNETS: Record<string, string> = {
+  'fasth3v2-8': 'fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors',
+};
+/** The turbo presets whose file ComfyUI lists, under exactly the name the graph asks for. */
+export const availableH3Turbo = (loras: readonly string[], unets: readonly string[] = []) => {
+  const haveLora = new Set(loras);
+  const haveUnet = new Set(unets);
+  return H3_TURBO.filter((t) => (t.key in H3_TURBO_UNETS ? haveUnet.has(H3_TURBO_UNETS[t.key]) : haveLora.has(H3_TURBO_FILES[t.key])));
 };
 
 export const H3_REF_TURBO_FILE =

@@ -20,6 +20,7 @@
  */
 
 import { LTX25_ENV, LTX25_STOCK, ltx25Overrides, type Ltx25Slot } from './graphs/ltxfiles.js';
+import { H3_MODELS, H3_TEXT_ENCODER_ENV, h3TextEncoderOverride } from './graphs/h3.js';
 
 export interface ModelFile {
   /** Filename ComfyUI must see. Referenced verbatim by a graph builder. */
@@ -55,7 +56,8 @@ export interface ModelFile {
   gated?: boolean;
   /**
    * Set when an environment variable replaced the stock file (see
-   * server/graphs/ltxfiles.ts): the variable's name. `file` is then the
+   * server/graphs/ltxfiles.ts and H3_TEXT_ENCODER_ENV in server/graphs/h3.ts):
+   * the variable's name. `file` is then the
    * configured name, which the installer never downloads.
    */
   override?: string;
@@ -475,26 +477,29 @@ export const bundleGb = (b: Bundle): number =>
   Math.round(b.files.reduce((n, f) => n + f.gb, 0) * 10) / 10;
 
 /**
- * The bundles as this install runs them: a stock LTX-2.5 file that an
- * OPENFIELD_LTX25_* variable replaces is swapped for the configured file, so
- * preflight checks for the file the graphs actually load and the installer
- * does not fetch the stock one in its place. Without overrides this returns
+ * The bundles as this install runs them: a stock file that an
+ * OPENFIELD_LTX25_* variable or OPENFIELD_H3_TEXT_ENCODER replaces is swapped
+ * for the configured file, so preflight checks for the file the graphs actually
+ * load and the installer does not fetch the stock one in its place. Without overrides this returns
  * BUNDLES unchanged. BUNDLES itself always holds the stock files: docs/MODELS.md
  * is generated from it.
  */
 export function activeBundles(env: NodeJS.ProcessEnv = process.env): Bundle[] {
-  const set = ltx25Overrides(env);
-  const slots = Object.keys(set) as Ltx25Slot[];
-  if (!slots.length) return BUNDLES;
-  const bySlot = new Map(slots.map((s) => [LTX25_STOCK[s], s]));
+  // Stock file name -> the configured file and the variable that set it.
+  const swaps = new Map<string, { file: string; env: string }>();
+  const ltx = ltx25Overrides(env);
+  for (const s of Object.keys(ltx) as Ltx25Slot[]) swaps.set(LTX25_STOCK[s], { file: ltx[s]!, env: LTX25_ENV[s] });
+  const h3Encoder = h3TextEncoderOverride(env);
+  if (h3Encoder) swaps.set(H3_MODELS.clip, { file: h3Encoder, env: H3_TEXT_ENCODER_ENV });
+  if (!swaps.size) return BUNDLES;
   return BUNDLES.map((b) => {
-    if (!b.files.some((f) => bySlot.has(f.file))) return b;
+    if (!b.files.some((f) => swaps.has(f.file))) return b;
     return {
       ...b,
       files: b.files.map((f) => {
-        const s = bySlot.get(f.file);
+        const s = swaps.get(f.file);
         // Never downloaded, so it adds nothing to the bundle's download size.
-        return s ? { ...f, file: set[s]!, override: LTX25_ENV[s], gb: 0 } : f;
+        return s ? { ...f, file: s.file, override: s.env, gb: 0 } : f;
       }),
     };
   });

@@ -71,7 +71,13 @@ export interface H3TurboPreset {
    *  distill is not and renders correctly without it. */
   shiftVideo?: number;
   shiftAudio?: number;
-  fl2vaLora: string;
+  /** The step-distill LoRA patched onto the stock FL2VA model. */
+  fl2vaLora?: string;
+  /**
+   * Or a whole distilled FL2VA model loaded in place of the stock one (models/
+   * diffusion_models/), with no distill LoRA. Exactly one of the two is set.
+   */
+  unet?: string;
   note: string;
 }
 
@@ -80,6 +86,18 @@ export const H3_REF_TURBO_LORA =
 export const H3_REF_TURBO_STEPS = 4;
 
 export const H3_TURBO_PRESETS: H3TurboPreset[] = [
+  {
+    id: 'fasth3v2-8',
+    label: '8-STEP · FASTH3 V2',
+    steps: 8,
+    // Matches ComfyUI's FastVideo FastH3 templates (video_fastvideo_fasth3_i2v /
+    // _t2v): res_multistep, simple, 8 steps, MiniMaxH3SigmaShift 10 / 3. The
+    // model card: "scheduler shift is 10, not the base model's 12".
+    shiftVideo: 10,
+    shiftAudio: 3,
+    unet: 'fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors',
+    note: 'FastVideo FastH3 8-step V2, the merged model ComfyUI\'s FastH3 templates load (FastVideo/FastVideo-FastH3-Comfy). No distill LoRA, so your own LoRA still applies.',
+  },
   {
     id: 'fasth3-6',
     label: '6-STEP · FASTH3',
@@ -117,16 +135,24 @@ export const H3_TURBO_PRESETS: H3TurboPreset[] = [
   },
 ];
 
-/** Resolve a preset id + mode into the LoRA/steps/shift actually applied. */
-export function resolveTurbo(
-  turboId: string | undefined,
-  useRef: boolean,
-): { lora: string; steps: number; shiftVideo?: number; shiftAudio?: number } | null {
+export interface ResolvedTurbo {
+  /** Distill LoRA to patch on, or undefined for a whole-model preset. */
+  lora?: string;
+  /** Distilled model loaded in place of the stock one, for a whole-model preset. */
+  unet?: string;
+  steps: number;
+  shiftVideo?: number;
+  shiftAudio?: number;
+}
+
+/** Resolve a preset id + mode into the model/LoRA/steps/shift actually applied. */
+export function resolveTurbo(turboId: string | undefined, useRef: boolean): ResolvedTurbo | null {
   if (!turboId) return null;
   const preset = H3_TURBO_PRESETS.find((p) => p.id === turboId);
   if (!preset) return null;
   if (useRef) {
-    // Only one ref2v distill exists; every preset maps to it at its own 4 steps.
+    // Only one ref2v distill exists; every preset maps to it at its own 4 steps
+    // (a whole FL2VA model cannot drive the ref graph, so FastH3 V2 does too).
     return {
       lora: H3_REF_TURBO_LORA,
       steps: H3_REF_TURBO_STEPS,
@@ -136,6 +162,7 @@ export function resolveTurbo(
   }
   return {
     lora: preset.fl2vaLora,
+    unet: preset.unet,
     steps: preset.steps,
     shiftVideo: preset.shiftVideo,
     shiftAudio: preset.shiftAudio,
@@ -150,11 +177,39 @@ export const H3_MODELS = {
   audioVae: 'minimax_h3_audio_vae_fp32.safetensors',
 };
 
-/** Why a turbo preset cannot run with the LoRAs ComfyUI lists (`have`), or null when it can. */
-export function turboProblem(turbo: string, useRef: boolean, have: ReadonlySet<string>): string | null {
+/**
+ * OPENFIELD_H3_TEXT_ENCODER swaps the stock H3 text encoder for another file in
+ * models/text_encoders/ (an abliterated build, another quantization). The value
+ * is the name exactly as ComfyUI lists it, subfolder prefix included. Read when
+ * a graph is built, like the LTX-2.5 overrides in ./ltxfiles.ts; activeBundles()
+ * in server/models.ts checks for the configured file instead of the stock one.
+ */
+export const H3_TEXT_ENCODER_ENV = 'OPENFIELD_H3_TEXT_ENCODER';
+
+/** The configured H3 text encoder, or '' when the stock one is in use. */
+export function h3TextEncoderOverride(env: NodeJS.ProcessEnv = process.env): string {
+  return (env[H3_TEXT_ENCODER_ENV] ?? '').trim();
+}
+
+/** The text encoder H3 graphs load. */
+export function h3TextEncoder(env: NodeJS.ProcessEnv = process.env): string {
+  return h3TextEncoderOverride(env) || H3_MODELS.clip;
+}
+
+/** What ComfyUI lists, for turboProblem: LoRA names and diffusion model (UNETLoader) names. */
+export interface TurboFiles {
+  loras: ReadonlySet<string>;
+  unets: ReadonlySet<string>;
+}
+
+/** Why a turbo preset cannot run with the files ComfyUI lists, or null when it can. */
+export function turboProblem(turbo: string, useRef: boolean, have: TurboFiles): string | null {
   const t = resolveTurbo(turbo, useRef);
   if (!t) return `Unknown H3 turbo preset "${turbo}". Use one of: ${H3_TURBO_PRESETS.map((p) => p.id).join(', ')}.`;
-  if (have.has(t.lora)) return null;
+  if (t.unet && !have.unets.has(t.unet)) {
+    return `The H3 turbo preset "${turbo}" needs ${t.unet} in models/diffusion_models/. OpenField does not download this one; it is in FastVideo/FastVideo-FastH3-Comfy on Hugging Face.`;
+  }
+  if (!t.lora || have.loras.has(t.lora)) return null;
   const from = /fasth3/.test(t.lora) ? 'OpenField does not download this one; put it there yourself.' : '"npm run models -- --only h3-turbo" fetches it.';
   return `The H3 turbo preset "${turbo}" needs ${t.lora} in models/loras/. ${from}`;
 }
@@ -179,14 +234,17 @@ export function buildH3Graph(p: H3Params): Record<string, unknown> {
   const family = useRef ? 'ref2va' : 'fl2va';
   // Checkpoint override is honored only within the correct model family —
   // an fl2va file can't drive the ref graph and vice versa.
-  const unetName =
-    p.checkpoint && p.checkpoint.includes(`minimax_h3_${family}`)
+  const turbo = resolveTurbo(p.turbo, useRef);
+  const unetName = turbo?.unet
+    ? turbo.unet
+    : p.checkpoint && p.checkpoint.includes(`minimax_h3_${family}`)
       ? p.checkpoint
       : H3_MODELS[family];
-  // Turbo wins over a hand-picked extraLora: the distill and its sigma shift are
-  // a matched pair, and stacking a second LoRA on top muddies both.
-  const turbo = resolveTurbo(p.turbo, useRef);
-  const loraName = turbo ? turbo.lora : p.extraLora;
+  // A distill LoRA wins over a hand-picked extraLora: the distill and its sigma
+  // shift are a matched pair, and stacking a second LoRA on top muddies both.
+  // A whole-model preset has no distill LoRA, so the hand-picked one stays.
+  const distill = !!turbo?.lora;
+  const loraName = distill ? turbo!.lora : p.extraLora;
   const steps = turbo ? turbo.steps : p.steps;
   // A LoRA is spliced between the UNET and its two consumers (scheduler +
   // guider); both must read the patched model or the distill only half-applies.
@@ -197,7 +255,7 @@ export function buildH3Graph(p: H3Params): Record<string, unknown> {
   const modelSrc = useShiftSrc(turbo, useLora);
   const g: Record<string, unknown> = {
     u: { class_type: 'UNETLoader', inputs: { unet_name: unetName, weight_dtype: 'default' } },
-    c: { class_type: 'CLIPLoader', inputs: { clip_name: H3_MODELS.clip, type: 'minimax', device: 'default' } },
+    c: { class_type: 'CLIPLoader', inputs: { clip_name: h3TextEncoder(), type: 'minimax', device: 'default' } },
     vv: { class_type: 'VAELoader', inputs: { vae_name: H3_MODELS.videoVae } },
     va: { class_type: 'VAELoader', inputs: { vae_name: H3_MODELS.audioVae } },
     sampler: { class_type: 'KSamplerSelect', inputs: { sampler_name: 'res_multistep' } },
@@ -227,7 +285,7 @@ export function buildH3Graph(p: H3Params): Record<string, unknown> {
         model: ['u', 0],
         lora_name: loraName,
         // Distills are trained for strength 1.0; only a manual LoRA is dialable.
-        strength_model: turbo
+        strength_model: distill
           ? 1.0
           : Number.isFinite(p.extraLoraStrength)
             ? p.extraLoraStrength

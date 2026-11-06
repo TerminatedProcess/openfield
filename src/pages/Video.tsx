@@ -42,7 +42,7 @@ export default function VideoPage() {
   const [turbos, setTurbos] = useState<ReturnType<typeof availableH3Turbo>>([]);
   useEffect(() => {
     if (model.id !== 'h3') return;
-    api.models().then((m) => setTurbos(availableH3Turbo(m.checkpoints.loras ?? []))).catch(() => setTurbos([]));
+    api.models().then((m) => setTurbos(availableH3Turbo(m.checkpoints.loras ?? [], m.checkpoints.unets_all ?? []))).catch(() => setTurbos([]));
   }, [model.id]);
 
   // Take refs handed over from another page (Animate, Make a loop, ...).
