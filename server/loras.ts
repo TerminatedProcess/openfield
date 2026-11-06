@@ -1,7 +1,7 @@
 /**
  * Your own LoRAs: any LoRA file the engine can see that OpenField does not
  * already load for one of its apps, offered in Image (Qwen-Image, FLUX.2) and
- * Video (LTX-2.5, cast sheets included).
+ * Video (LTX-2.5, cast sheets included; MiniMax H3).
  *
  * Each file's family comes from its tensor keys, not its name: a LoRA loaded
  * onto the wrong model does nothing (ComfyUI only logs "lora key not loaded"),
@@ -20,7 +20,7 @@ import { config } from './config.js';
 import { comboOptions } from './comfy.js';
 import { BUNDLES } from './models.js';
 
-export type LoraFamily = 'ltx' | 'qwen' | 'flux2' | 'flux' | 'wan' | 'other';
+export type LoraFamily = 'ltx' | 'h3' | 'qwen' | 'flux2' | 'flux' | 'wan' | 'other';
 
 export interface UserLora {
   name: string;
@@ -47,8 +47,10 @@ const TASK_LORA = /ic-lora|lightning|turbo|lightx2v|distill|fasth3|marigold|mult
 
 /** The model each app's own LoRAs must match. */
 export const FAMILY_LABEL: Record<LoraFamily, string> = {
-  ltx: 'LTX', qwen: 'Qwen-Image', flux2: 'FLUX.2', flux: 'FLUX.1', wan: 'Wan', other: 'another model',
+  ltx: 'LTX', h3: 'MiniMax H3', qwen: 'Qwen-Image', flux2: 'FLUX.2', flux: 'FLUX.1', wan: 'Wan', other: 'another model',
 };
+
+const H3_KEY = /(^|diffusion_model\.|lora_unet_|transformer\.)(blocks[._]\d+[._](attn[._](qkv|out)[._]proj|mlp[._]fc\d)|token_refiner[._]blocks|video_patch_proj|audio_patch_proj)/;
 
 /** Family from the tensor key names of a LoRA's safetensors header. */
 export function familyOf(keys: string[]): LoraFamily | 'not-lora' {
@@ -61,6 +63,12 @@ export function familyOf(keys: string[]): LoraFamily | 'not-lora' {
   if (has(/transformer_blocks[._]\d+[._](attn[._]add_[qkv]_proj|img_mlp|txt_mlp|img_mod)/)) return 'qwen';
   if (has(/transformer_blocks[._]\d+[._](attn1|attn2|audio_attn|ff)[._]/)) return 'ltx';
   if (has(/(^|[._])blocks[._]\d+[._](cross_attn|self_attn)[._]/)) return 'wan';
+  // MiniMax H3: top-level blocks with a fused qkv_proj / out_proj attention and
+  // an fc1/fc2 MLP, plus H3-only modules (token_refiner, the video/audio patch
+  // projections). Covers diffusers, kohya (lora_unet_blocks_0_attn_qkv_proj)
+  // and musubi (attn.qkv.proj) keys, and MLP-only LoRAs. Krea2 (attn.wq/wk/gate,
+  // mlp.up/down) does not match. Checked against 330 H3 LoRAs and ~940 others.
+  if (has(H3_KEY)) return 'h3';
   return 'other';
 }
 

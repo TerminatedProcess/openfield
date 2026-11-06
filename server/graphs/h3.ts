@@ -20,6 +20,11 @@ export interface H3Params {
   /** Optional LoRA (e.g. the lightx2v fl2v turbo step-distills). */
   extraLora?: string;
   extraLoraStrength?: number;
+  /**
+   * Your own LoRAs (server/loras.ts pickLoras, family 'h3'), chained in order
+   * after the distill LoRA when a turbo preset has one, before the sigma shift.
+   */
+  loras?: { name: string; strength: number }[];
   /** Turbo preset id from H3_TURBO_PRESETS; '' / undefined = full sampling. */
   turbo?: string;
   /**
@@ -220,15 +225,6 @@ export function snapH3Length(frames: number): number {
   return Math.max(5, Math.min(362, 17 * Math.max(0, k) + 5));
 }
 
-/** Which node the scheduler and guider should read the model from. */
-function useShiftSrc(
-  turbo: { shiftVideo?: number; shiftAudio?: number } | null,
-  useLora: boolean,
-): string {
-  if (turbo && turbo.shiftVideo !== undefined && turbo.shiftAudio !== undefined) return 'shift';
-  return useLora ? 'lora' : 'u';
-}
-
 export function buildH3Graph(p: H3Params): Record<string, unknown> {
   const useRef = !!p.refImages?.length;
   const family = useRef ? 'ref2va' : 'fl2va';
@@ -250,9 +246,13 @@ export function buildH3Graph(p: H3Params): Record<string, unknown> {
   // guider); both must read the patched model or the distill only half-applies.
   // No CLIP side: H3 runs CFG 1 with no negative conditioning.
   const useLora = typeof loraName === 'string' && loraName.length > 0;
-  // Sigma shift sits AFTER the LoRA so the shifted sigmas apply to the patched
-  // model. Only turbo sets it — full sampling keeps the model's own schedule.
-  const modelSrc = useShiftSrc(turbo, useLora);
+  // Your LoRAs follow: u -> [lora] -> ul0..ul3. The sigma shift sits AFTER every
+  // LoRA so the shifted sigmas apply to the patched model. Only turbo sets it —
+  // full sampling keeps the model's own schedule.
+  const userLoras = (p.loras ?? []).slice(0, 4);
+  const lastLora = userLoras.length ? `ul${userLoras.length - 1}` : useLora ? 'lora' : 'u';
+  const useShift = !!turbo && turbo.shiftVideo !== undefined && turbo.shiftAudio !== undefined;
+  const modelSrc = useShift ? 'shift' : lastLora;
   const g: Record<string, unknown> = {
     u: { class_type: 'UNETLoader', inputs: { unet_name: unetName, weight_dtype: 'default' } },
     c: { class_type: 'CLIPLoader', inputs: { clip_name: h3TextEncoder(), type: 'minimax', device: 'default' } },
@@ -294,12 +294,18 @@ export function buildH3Graph(p: H3Params): Record<string, unknown> {
     };
   }
 
-  const useShift = !!turbo && turbo.shiftVideo !== undefined && turbo.shiftAudio !== undefined;
+  userLoras.forEach((l, i) => {
+    g[`ul${i}`] = {
+      class_type: 'LoraLoaderModelOnly',
+      inputs: { model: [i === 0 ? (useLora ? 'lora' : 'u') : `ul${i - 1}`, 0], lora_name: l.name, strength_model: l.strength },
+    };
+  });
+
   if (useShift) {
     g.shift = {
       class_type: 'MiniMaxH3SigmaShift',
       inputs: {
-        model: [useLora ? 'lora' : 'u', 0],
+        model: [lastLora, 0],
         shift_video: turbo!.shiftVideo,
         shift_audio: turbo!.shiftAudio,
       },

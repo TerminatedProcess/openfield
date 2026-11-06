@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon, useClickAway } from './ui';
 
-export type LoraFamily = 'ltx' | 'qwen' | 'flux2' | 'flux' | 'wan' | 'other';
+export type LoraFamily = 'ltx' | 'h3' | 'qwen' | 'flux2' | 'flux' | 'wan' | 'other';
 export interface UserLora { name: string; family: LoraFamily | null; trigger?: string }
 export interface LoraPick { name: string; strength: number }
 
@@ -30,10 +30,15 @@ export function useLoraPicks(family: LoraFamily): [LoraPick[], (v: LoraPick[]) =
   const read = (): LoraPick[] => {
     try { return JSON.parse(localStorage.getItem(key) ?? '[]'); } catch { return []; }
   };
-  const [picks, setPicks] = useState<LoraPick[]>(read);
-  useEffect(() => { setPicks(read()); }, [family]);
+  // Picks are tied to the family they were read for. On the render where the
+  // family changes, the stored picks for the new family are read right away:
+  // handing the old family's picks to LoraChips for one render would let its
+  // "drop what doesn't fit" pass save an empty list over the new family's picks.
+  const [state, setState] = useState(() => ({ key, picks: read() }));
+  const picks = state.key === key ? state.picks : read();
+  useEffect(() => { if (state.key !== key) setState({ key, picks: read() }); }, [key]);
   const set = (v: LoraPick[]) => {
-    setPicks(v);
+    setState({ key, picks: v });
     try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* private window */ }
   };
   return [picks, set];
@@ -43,11 +48,12 @@ export function LoraChips({ family, value, onChange, dir = 'up' }: {
   family: LoraFamily; value: LoraPick[]; onChange: (v: LoraPick[]) => void; dir?: 'up' | 'down';
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const [all, setAll] = useState<UserLora[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   useClickAway(ref, () => setOpen(false), open);
   useEffect(() => { void fetchLoras().then(setAll); }, []);
-  useEffect(() => { if (open) void fetchLoras(true).then(setAll); }, [open]);
+  useEffect(() => { if (open) void fetchLoras(true).then(setAll); else setQuery(''); }, [open]);
 
   const fits = all.filter((l) => l.family === family || l.family === null);
   // Drop picks the engine no longer has once the list has loaded.
@@ -61,6 +67,9 @@ export function LoraChips({ family, value, onChange, dir = 'up' }: {
   const nudge = (i: number, d: number) =>
     onChange(value.map((p, j) => (j === i ? { ...p, strength: Math.round(Math.max(-2, Math.min(2, p.strength + d)) * 10) / 10 } : p)));
   const free = fits.filter((l) => !value.some((p) => p.name === l.name));
+  // Every word must appear in the file name or its trigger, in any order.
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length ? free.filter((l) => words.every((w) => `${l.name} ${l.trigger ?? ''}`.toLowerCase().includes(w))) : free;
 
   return (
     <>
@@ -72,13 +81,20 @@ export function LoraChips({ family, value, onChange, dir = 'up' }: {
         </button>
         {open && (
           <div className={`popover ${dir}`} style={{ left: 0, maxHeight: 340, overflowY: 'auto', minWidth: 260 }}>
-            <div className="pop-title label">Your LoRAs</div>
-            {free.map((l) => (
+            <div className="pop-title label">Your LoRAs{fits.length > 8 ? ` · ${shown.length} of ${free.length}` : ''}</div>
+            {fits.length > 8 && (
+              <input type="search" autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your LoRAs"
+                style={{ width: '100%', boxSizing: 'border-box', margin: '2px 0 6px' }} aria-label="Search your LoRAs" />
+            )}
+            {shown.map((l) => (
               <button key={l.name} type="button" className="pop-item" disabled={value.length >= MAX} onClick={() => add(l.name)}>
                 <span>{short(l.name)}</span>
                 {(l.trigger || l.family === null) && <small>{l.trigger ? `trigger: ${l.trigger}` : 'could not read its model'}</small>}
               </button>
             ))}
+            {free.length > 0 && !shown.length && (
+              <div className="pop-item" style={{ cursor: 'default' }}><small>No LoRA matches "{query}".</small></div>
+            )}
             {!free.length && (
               <div className="pop-item" style={{ cursor: 'default' }}>
                 <small>{fits.length ? 'All added.' : "No LoRAs for this model yet. Put .safetensors files in ComfyUI's models/loras folder; they show up without a restart."}</small>

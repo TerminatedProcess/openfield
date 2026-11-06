@@ -813,6 +813,7 @@ async function graphFor(b: any, seed: number): Promise<Built> {
       checkpoint: typeof b.checkpoint === 'string' ? b.checkpoint : undefined,
       extraLora: typeof b.extraLora === 'string' && b.extraLora ? b.extraLora : undefined,
       extraLoraStrength: b.extraLoraStrength,
+      loras: await pickLoras(b.loras, 'h3', 'Video'),
       // Turbo overrides steps/shift inside the builder; '' = full sampling.
       turbo,
       // House rule: no audio on visual loops. Opt in per shot for dialogue.
@@ -922,7 +923,7 @@ app.post('/api/generate', async (req, reply) => {
 
   if (Array.isArray(b.loras) && b.loras.length) {
     const fam = loraFamily(b);
-    if (!fam) return reply.code(400).send({ error: 'Your own LoRAs work in Image and Video (LTX-2.5) for now.' });
+    if (!fam) return reply.code(400).send({ error: 'Your own LoRAs work in Image and Video (LTX-2.5, MiniMax H3) for now.' });
     try { await pickLoras(b.loras, fam, b.kind === 'still' ? 'Image' : 'Video'); }
     catch (e) { return reply.code(400).send({ error: e instanceof Error ? e.message : 'bad LoRA' }); }
   }
@@ -942,6 +943,7 @@ app.post('/api/generate', async (req, reply) => {
 /** The text a body's @mentions live in. */
 const castField = (b: any) => (b.kind === 'edit' ? 'instruction' : 'prompt');
 const isLtxShot = (b: any) => (b.kind === undefined || b.kind === 'video') && b.videoModel === 'ltx25';
+const isH3Shot = (b: any) => (b.kind === undefined || b.kind === 'video') && b.videoModel === 'h3';
 
 /** FLUX.2 reads up to this many reference pictures per still (each is ~1 MP of latent). */
 const FLUX2_REFS = 6;
@@ -957,6 +959,7 @@ const flux2Refs = (b: any): string[] => {
 function loraFamily(b: any): LoraFamily | null {
   if (b.kind === 'still') return b.model === 'flux2' ? 'flux2' : 'qwen';
   if (isLtxShot(b)) return 'ltx';
+  if (isH3Shot(b)) return 'h3';
   return null;
 }
 

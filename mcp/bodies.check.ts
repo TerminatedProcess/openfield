@@ -94,8 +94,8 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
     });
     same(c.name, mine, oracle);
   }
-  // Your own LoRAs: LTX-2.5 only, sent as the chip holds them.
-  assert.ok(src.includes("if (model.id === 'ltx25' && loras.length) body.loras = loras;"), 'Video.tsx LoRA rule moved');
+  // Your own LoRAs: LTX-2.5 and MiniMax H3, sent as the chip holds them.
+  assert.ok(src.includes("if ((model.id === 'ltx25' || model.id === 'h3') && loras.length) body.loras = loras;"), 'Video.tsx LoRA rule moved');
   {
     const model = VIDEO_MODELS.find((m) => m.id === 'ltx25')!;
     const preset = presetById('free');
@@ -104,7 +104,11 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
     const oracle = expr(bodySrc, { model, compiled: compilePrompt(['a man runs', preset.text]), prompt: 'a man runs', preset, size, seconds: 5, count: 1, audio: false, start: undefined, end: undefined });
     oracle.loras = loras;
     same('video ltx25 + your LoRA', videoBody({ model: 'ltx25', prompt: 'a man runs', preset: 'free', size: videoSize('16:9', '720p'), seconds: 5, count: 1, audio: false, loras }), oracle);
-    assert.throws(() => videoBody({ model: 'h3', prompt: 'x', preset: 'free', size, seconds: 5, count: 1, audio: false, startImage: 's.png', loras }), /LTX-2.5/);
+    const h3Model = VIDEO_MODELS.find((m) => m.id === 'h3')!;
+    const h3Oracle = expr(bodySrc, { model: h3Model, compiled: compilePrompt(['x', preset.text]), prompt: 'x', preset, size, seconds: 5, count: 1, audio: false, start: { token: 's.png' }, end: undefined });
+    h3Oracle.lengthFrames = secondsToFrames(5);
+    h3Oracle.loras = loras;
+    same('video h3 + your LoRA', videoBody({ model: 'h3', prompt: 'x', preset: 'free', size, seconds: 5, count: 1, audio: false, startImage: 's.png', loras }), h3Oracle);
   }
   // H3 turbo: the page sends h3Turbo only on H3, as the chip picked it.
   assert.ok(src.includes("if (model.id === 'h3' && turbo) body.h3Turbo = turbo;"), 'Video.tsx H3 turbo rule moved');

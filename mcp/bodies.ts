@@ -91,7 +91,7 @@ export function videoBody(o: VideoOpts): Body {
   if (o.castMode === 'frame') body.castMode = 'frame';
   if (o.loop && o.autoFix) body.seamFix = 'auto';
   if (o.loras?.length) {
-    if (model.id !== 'ltx25') throw new Error('Your own LoRAs run on LTX-2.5.');
+    if (model.id !== 'ltx25' && model.id !== 'h3') throw new Error('Your own LoRAs run on LTX-2.5 and MiniMax H3.');
     body.loras = o.loras;
   }
   return body;

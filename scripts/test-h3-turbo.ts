@@ -9,6 +9,7 @@ import assert from 'assert/strict';
 import { H3_REF_TURBO_FILE, H3_TURBO, H3_TURBO_FILES, H3_TURBO_UNETS, availableH3Turbo } from '../src/presets.js';
 import { H3_MODELS, H3_REF_TURBO_LORA, H3_TEXT_ENCODER_ENV, H3_TURBO_PRESETS, buildH3Graph, h3TextEncoder, turboProblem } from '../server/graphs/h3.js';
 import { BUNDLES, activeBundles } from '../server/models.js';
+import { familyOf } from '../server/loras.js';
 import { estimate, type EstimateTake } from '../server/estimate.js';
 
 let failed = 0;
@@ -97,6 +98,56 @@ check('FastH3 V2 swaps the model, runs 8 steps at shift 10/3, and keeps a hand-p
   // A distill preset still wins over a hand-picked LoRA, as before.
   const distilled = buildH3Graph({ ...args, turbo: 'v11-4', extraLora: 'mine.safetensors' }) as G;
   assert.equal(distilled.lora.inputs.lora_name, V11);
+});
+
+// Key layouts taken from real LoRAs (numbers kept, one block shown).
+const lora = (mods: string[], style: 'peft' | 'kohya' = 'peft') =>
+  mods.flatMap((m) => (style === 'peft' ? [`${m}.lora_A.weight`, `${m}.lora_B.weight`] : [`${m}.lora_down.weight`, `${m}.lora_up.weight`, `${m}.alpha`]));
+
+check('H3 LoRAs are told apart by their keys, in every trainer layout', () => {
+  assert.equal(familyOf(lora(['diffusion_model.blocks.0.attn.qkv_proj', 'diffusion_model.blocks.0.attn.out_proj', 'diffusion_model.token_refiner.blocks.0.mlp.fc1'])), 'h3');
+  assert.equal(familyOf(lora(['lora_unet_blocks_0_attn_qkv_proj', 'lora_unet_blocks_0_mlp_fc2'], 'kohya')), 'h3', 'kohya');
+  assert.equal(familyOf(lora(['diffusion_model.blocks.3.attn.qkv.proj', 'diffusion_model.blocks.3.attn.out.proj'])), 'h3', 'musubi dotted');
+  assert.equal(familyOf(lora(['diffusion_model.blocks.7.mlp.fc1', 'diffusion_model.blocks.7.mlp.fc2'])), 'h3', 'MLP only');
+  assert.equal(familyOf(lora(['lora_unet_blocks_7_mlp_fc1'], 'kohya')), 'h3', 'kohya MLP only');
+  // Not H3:
+  assert.equal(familyOf(lora(['diffusion_model.blocks.0.attn.wq', 'diffusion_model.blocks.0.attn.gate', 'diffusion_model.blocks.0.mlp.up'])), 'other', 'Krea2');
+  assert.equal(familyOf(lora(['transformer_blocks.0.attn.add_q_proj', 'transformer_blocks.0.img_mlp.net.0.proj'])), 'qwen');
+  assert.equal(familyOf(lora(['diffusion_model.transformer_blocks.0.attn1.to_q', 'diffusion_model.transformer_blocks.0.ff.net.0.proj'])), 'ltx');
+  assert.equal(familyOf(lora(['diffusion_model.blocks.0.self_attn.q', 'diffusion_model.blocks.0.cross_attn.k'])), 'wan');
+  assert.equal(familyOf(lora(['double_blocks.0.img_attn.qkv'])), 'flux', 'double_blocks is not H3 blocks');
+  assert.equal(familyOf(['diffusion_model.blocks.0.attn.qkv_proj.weight']), 'not-lora', 'a full model is not a LoRA');
+});
+
+check('your LoRAs chain after the distill LoRA and before the sigma shift', () => {
+  type G = Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+  const mine = [{ name: 'a.safetensors', strength: 0.8 }, { name: 'b.safetensors', strength: -0.3 }];
+  const base = { prompt: 'p', width: 832, height: 480, lengthFrames: 124, seed: 1, steps: 20, startImage: 's.png' };
+  // Full sampling: u -> ul0 -> ul1 -> sampler, no shift.
+  const full = buildH3Graph({ ...base, loras: mine }) as G;
+  assert.deepEqual(full.ul0.inputs.model, ['u', 0]);
+  assert.deepEqual([full.ul0.inputs.lora_name, full.ul0.inputs.strength_model], ['a.safetensors', 0.8]);
+  assert.deepEqual(full.ul1.inputs.model, ['ul0', 0]);
+  assert.equal(full.ul1.inputs.strength_model, -0.3);
+  assert.deepEqual(full.sched.inputs.model, ['ul1', 0]);
+  assert.deepEqual(full.guider.inputs.model, ['ul1', 0]);
+  assert.equal(full.shift, undefined);
+  // Distill turbo: u -> lora (distill) -> ul0 -> ul1 -> shift -> sampler.
+  const distill = buildH3Graph({ ...base, loras: mine, turbo: 'v11-4' }) as G;
+  assert.equal(distill.lora.inputs.lora_name, V11);
+  assert.deepEqual(distill.ul0.inputs.model, ['lora', 0]);
+  assert.deepEqual(distill.shift.inputs.model, ['ul1', 0]);
+  assert.deepEqual(distill.sched.inputs.model, ['shift', 0]);
+  // FastH3 V2: the whole model, then your LoRAs, then its shift.
+  const v2 = buildH3Graph({ ...base, loras: mine, turbo: 'fasth3v2-8' }) as G;
+  assert.equal(v2.u.inputs.unet_name, FASTH3V2);
+  assert.equal(v2.lora, undefined);
+  assert.deepEqual(v2.ul0.inputs.model, ['u', 0]);
+  assert.deepEqual(v2.shift.inputs.model, ['ul1', 0]);
+  // At most four, and none means the graph is exactly as before.
+  const five = buildH3Graph({ ...base, loras: [...mine, ...mine, mine[0]] }) as G;
+  assert.ok(five.ul3 && !five.ul4);
+  assert.deepEqual(buildH3Graph({ ...base, loras: [] }), buildH3Graph(base));
 });
 
 const CUSTOM_ENCODER = 'h3\\qwen3vl_32b_heretic_minimax_h3_nvfp4.safetensors';

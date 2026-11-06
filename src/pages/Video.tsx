@@ -36,7 +36,9 @@ export default function VideoPage() {
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
   const [castMode, setCastMode] = useState<'sheet' | 'frame'>('sheet');
-  const [loras, setLoras] = useLoraPicks('ltx');
+  // Your LoRAs, remembered per engine: an LTX LoRA does nothing on H3 and back.
+  const loraFamily = model.id === 'h3' ? 'h3' : 'ltx';
+  const [loras, setLoras] = useLoraPicks(loraFamily);
   // H3 turbo: '' = full sampling. Offered only for the distills ComfyUI lists.
   const [turbo, setTurbo] = useState('');
   const [turbos, setTurbos] = useState<ReturnType<typeof availableH3Turbo>>([]);
@@ -121,7 +123,7 @@ export default function VideoPage() {
       };
       if (model.id === 'h3') body.lengthFrames = secondsToFrames(seconds);
       if (model.id === 'h3' && turbo) body.h3Turbo = turbo;
-      if (model.id === 'ltx25' && loras.length) body.loras = loras;
+      if ((model.id === 'ltx25' || model.id === 'h3') && loras.length) body.loras = loras;
       if (castOn && castMode === 'frame') body.castMode = 'frame';
       if (mode === 'loop' && autoFix) body.seamFix = 'auto';
       const r = await api.generate(body);
@@ -213,7 +215,7 @@ export default function VideoPage() {
             options={[{ value: 'auto', label: 'Auto', note: start ? 'from frame' : '16:9' }, ...ASPECTS.map((a) => ({ value: a.id, label: a.id }))]} />
           <TierChip app="video" value={res} onChange={setRes} />
           <Stepper value={count} min={1} max={4} onChange={setCount} fmt={(v) => `${v}/4`} />
-          {model.id === 'ltx25' && <LoraChips family="ltx" value={loras} onChange={setLoras} />}
+          {(model.id === 'ltx25' || model.id === 'h3') && <LoraChips family={loraFamily} value={loras} onChange={setLoras} />}
           {model.id === 'h3' && turbos.length > 0 && (
             <ChipMenu icon="bolt" value={turbo} onChange={setTurbo} title="Turbo (step distill)"
               options={[{ value: '', label: 'Full · 20 steps', note: 'No distill: the slowest, the reference quality.' }, ...turbos.map((t) => ({ value: t.key, label: t.label, note: t.note }))]} />
