@@ -48,4 +48,13 @@ alias clog='journalctl --user -u comfyui --no-pager -n 50'
 alias clogf='journalctl --user -u comfyui -f'
 
 # ── Git (fork: origin = TerminatedProcess/openfield, upstream is fetch-only) ──
-alias sync='git fetch upstream; and git merge upstream/main'
+# Merge upstream/main; reinstall deps only if package-lock.json changed.
+function update
+    set -l before (git rev-parse HEAD)
+    git fetch upstream; and git merge upstream/main; or return 1
+    if not git diff --quiet $before HEAD -- package-lock.json
+        echo "── package-lock.json changed, reinstalling"
+        install
+    end
+end
+alias sync='update'  # hidden from help
