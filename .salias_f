@@ -48,13 +48,25 @@ alias clog='journalctl --user -u comfyui --no-pager -n 50'
 alias clogf='journalctl --user -u comfyui -f'
 
 # ── Git (fork: origin = TerminatedProcess/openfield, upstream is fetch-only) ──
-# Merge upstream/main; reinstall deps only if package-lock.json changed.
+# One step: merge upstream/main, push to the fork, reinstall deps if the lockfile
+# changed, restart openfield.service if it was running. Not gitupdate: that needs
+# main to be a pure mirror, and this fork keeps its commits on main.
 function update
+    if not git diff --quiet; or not git diff --cached --quiet
+        echo "Working tree dirty — commit or stash first." >&2; return 1
+    end
+    set -l was_up (systemctl --user is-active --quiet openfield; and echo 1)
     set -l before (git rev-parse HEAD)
-    git fetch upstream; and git merge upstream/main; or return 1
+    git fetch upstream; or return 1
+    git merge --no-edit upstream/main; or return 1
+    git push origin main; or return 1
     if not git diff --quiet $before HEAD -- package-lock.json
         echo "── package-lock.json changed, reinstalling"
-        install
+        install; or return 1
+    end
+    if test -n "$was_up"
+        echo "Restarting openfield.service ..."
+        systemctl --user restart openfield
     end
 end
 alias sync='update'  # hidden from help

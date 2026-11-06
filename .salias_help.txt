@@ -27,4 +27,4 @@ COMFYUI (systemd)
   clog / clogf      Last 50 log lines / follow log
 
 GIT
-  update            Merge upstream main into this fork (reinstalls deps if lockfile changed)
+  update            Merge upstream, push, reinstall deps if needed, restart service
