@@ -19,8 +19,8 @@
  * is checked for under its configured name and never downloaded.
  */
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, renameSync, statSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from 'fs';
+import { dirname, join } from 'path';
 import { activeBundles, bundleGb, type Bundle, type ModelFile } from '../server/models.js';
 import { config } from '../server/config.js';
 import { getStatus } from '../server/comfy.js';
@@ -79,18 +79,50 @@ const onDisk = (f: ModelFile) => !!DEST && existsSync(target(f)) && statSync(tar
  * a disk-only check then reports a fully working install as empty. Fall back to
  * looking under DEST only when the engine is not answering.
  */
-type InstalledCheck = { has: (f: ModelFile) => boolean; source: string };
+type InstalledCheck = {
+  has: (f: ModelFile) => boolean;
+  /** Whether a bundle's custom node pack is installed. */
+  hasPack: (bundleId: string, pack: string) => boolean;
+  source: string;
+};
+
+/**
+ * A pack folder name reduced for matching: case and separators vary between
+ * installs (ComfyUI-VideoHelperSuite, comfyui-videohelpersuite), and the
+ * ComfyUI registry may drop the prefix (seedvr2_videoupscaler).
+ */
+const packKey = (name: string) => name.toLowerCase().replace(/^comfy-?ui/, '').replace(/[-_.\s]/g, '');
+
+/** Pack folders in custom_nodes/ next to DEST (ComfyUI/models -> ComfyUI/custom_nodes). */
+function packsOnDisk(): Set<string> {
+  if (!DEST) return new Set();
+  try {
+    return new Set(readdirSync(join(dirname(DEST.replace(/[\\/]+$/, '')), 'custom_nodes')).map(packKey));
+  } catch {
+    return new Set();
+  }
+}
 
 async function installedCheck(): Promise<InstalledCheck> {
   if ((await getStatus()).up) {
     // preflight reports what is absent; everything in the manifest it does not
     // name is therefore visible to the engine.
-    const absent = new Set(
-      (await preflight(true)).flatMap((b) => b.missingFiles.map((f) => f.file))
-    );
-    return { has: (f) => !absent.has(f.file), source: `the running engine at ${config.comfyUrl}` };
+    const status = await preflight(true);
+    const absent = new Set(status.flatMap((b) => b.missingFiles.map((f) => f.file)));
+    // By node class, as the engine reports them, so the folder name does not matter.
+    const absentPacks = new Set(status.flatMap((b) => b.missingNodes.map((n) => `${b.id}/${n.pack}`)));
+    return {
+      has: (f) => !absent.has(f.file),
+      hasPack: (id, pack) => !absentPacks.has(`${id}/${pack}`),
+      source: `the running engine at ${config.comfyUrl}`,
+    };
   }
-  return { has: onDisk, source: DEST ? `files under ${DEST}` : 'nothing (no engine, no --dest)' };
+  const packs = packsOnDisk();
+  return {
+    has: onDisk,
+    hasPack: (_id, pack) => packs.has(packKey(pack)),
+    source: DEST ? `files under ${DEST}` : 'nothing (no engine, no --dest)',
+  };
 }
 
 function requireDest(): void {
@@ -125,11 +157,11 @@ async function list(): Promise<void> {
   console.log(c.dim(`checked against ${check.source}\n`));
   for (const b of BUNDLES) {
     const missing = b.files.filter((f) => !check.has(f));
-    const state = missing.length === 0 ? c.ok(' OK  ') : c.bad('MISS ');
+    const missingPacks = packsOf([b]).filter((n) => !check.hasPack(b.id, n.pack));
+    const state = missing.length === 0 && missingPacks.length === 0 ? c.ok(' OK  ') : c.bad('MISS ');
     console.log(`${state} ${c.bold(b.id.padEnd(10))} ${b.label}  ${c.dim(`${bundleGb(b)} GB${b.optional ? ' · optional' : ''}`)}`);
-    if (b.licenseWarning) console.log(`       ${c.warn(b.licenseWarning)}`);
     for (const f of missing) console.log(c.dim(`       missing  models/${f.dir}/${f.file}${f.override ? `  (set by ${f.override})` : ''}`));
-    for (const n of packsOf([b])) console.log(c.dim(`       needs custom nodes: ${n.pack}  ${n.url}`));
+    for (const n of missingPacks) console.log(c.dim(`       missing  custom nodes: ${n.pack}  ${n.url}`));
   }
   console.log('');
 }
