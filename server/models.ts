@@ -21,6 +21,7 @@
 
 import { LTX25_ENV, LTX25_STOCK, ltx25Overrides, type Ltx25Slot } from './graphs/ltxfiles.js';
 import { H3_MODELS, H3_TEXT_ENCODER_ENV, h3TextEncoderOverride } from './graphs/h3.js';
+import { ENCODER_ENV, ENCODER_SLOTS, ENCODER_STOCK, encoderOverride } from './graphs/encoders.js';
 
 export interface ModelFile {
   /** Filename ComfyUI must see. Referenced verbatim by a graph builder. */
@@ -56,7 +57,8 @@ export interface ModelFile {
   gated?: boolean;
   /**
    * Set when an environment variable replaced the stock file (see
-   * server/graphs/ltxfiles.ts and H3_TEXT_ENCODER_ENV in server/graphs/h3.ts):
+   * server/graphs/ltxfiles.ts, H3_TEXT_ENCODER_ENV in server/graphs/h3.ts and
+   * the text encoder variables in server/graphs/encoders.ts):
    * the variable's name. `file` is then the
    * configured name, which the installer never downloads.
    */
@@ -478,7 +480,8 @@ export const bundleGb = (b: Bundle): number =>
 
 /**
  * The bundles as this install runs them: a stock file that an
- * OPENFIELD_LTX25_* variable or OPENFIELD_H3_TEXT_ENCODER replaces is swapped
+ * OPENFIELD_LTX25_* variable, OPENFIELD_H3_TEXT_ENCODER or a text encoder
+ * variable from server/graphs/encoders.ts replaces is swapped
  * for the configured file, so preflight checks for the file the graphs actually
  * load and the installer does not fetch the stock one in its place. Without overrides this returns
  * BUNDLES unchanged. BUNDLES itself always holds the stock files: docs/MODELS.md
@@ -491,6 +494,10 @@ export function activeBundles(env: NodeJS.ProcessEnv = process.env): Bundle[] {
   for (const s of Object.keys(ltx) as Ltx25Slot[]) swaps.set(LTX25_STOCK[s], { file: ltx[s]!, env: LTX25_ENV[s] });
   const h3Encoder = h3TextEncoderOverride(env);
   if (h3Encoder) swaps.set(H3_MODELS.clip, { file: h3Encoder, env: H3_TEXT_ENCODER_ENV });
+  for (const s of ENCODER_SLOTS) {
+    const file = encoderOverride(s, env);
+    if (file) swaps.set(ENCODER_STOCK[s], { file, env: ENCODER_ENV[s] });
+  }
   if (!swaps.size) return BUNDLES;
   return BUNDLES.map((b) => {
     if (!b.files.some((f) => swaps.has(f.file))) return b;

@@ -29,7 +29,8 @@ import * as eng from './engine.js';
 import { config } from './config.js';
 import { cast as castDb, takes, type Take } from './jobs.js';
 import { castHeroFrame, mentioned } from './cast.js';
-import { buildCutGraph, buildPlannerGraph, PLANNER_ENCODER, PLANNER_SYSTEM, type CutClip } from './graphs/director.js';
+import { ENCODER_ENV, encoderOverride, textEncoder } from './graphs/encoders.js';
+import { buildCutGraph, buildPlannerGraph, PLANNER_SYSTEM, type CutClip } from './graphs/director.js';
 import { parseShotList, partialShots, snapFraming, snapMove, snapSeconds, splitScene } from './shotlist.js';
 import {
   DIRECTOR_MOVES, SCENE_FRAMINGS, SCENE_MAX_SHOTS, SCENE_MIN_SHOTS, clampEra, directorDirection, isRamp, presetById, shotPrompt,
@@ -128,7 +129,9 @@ function systemPrompt(want: number): string {
 /** Run the planner graph on the engine and return the text it wrote. */
 async function planOnEngine(scene: string, want: number, seed: number): Promise<string> {
   const have = await comfy.comboOptions('CLIPLoader', 'clip_name');
-  if (!have.includes(PLANNER_ENCODER)) throw new Error(`the engine has no ${PLANNER_ENCODER} (it ships in the ltx23 bundle)`);
+  // The Gemma 3 12B text encoder of LTX-2.0 doubles as a working LLM.
+  const encoder = textEncoder('gemma3');
+  if (!have.includes(encoder)) throw new Error(`the engine has no ${encoder} (it ships in the ltx23 bundle${encoderOverride('gemma3') ? `, set by ${ENCODER_ENV.gemma3}` : ''})`);
   if (!(await hasNode('TextGenerateLTX2Prompt'))) throw new Error('the engine has no TextGenerateLTX2Prompt node (ComfyUI 0.38+)');
   const jobId = await eng.submit(buildPlannerGraph({ scene, system: systemPrompt(want), seed }));
   const deadline = Date.now() + 20 * 60_000;

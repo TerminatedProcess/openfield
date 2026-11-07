@@ -24,6 +24,8 @@
  * camera commands, which the recipes in src/catalog.ts include.
  */
 
+import { textEncoder } from './encoders.js';
+
 export interface EditParams {
   /** 1 to 3 loader filenames or asset tokens. images[0] is the one edited. */
   images: string[];
@@ -55,7 +57,6 @@ export interface EditParams {
 }
 
 export const EDIT_MODEL = 'qwen_image_edit_2509_fp8_e4m3fn.safetensors';
-export const EDIT_ENCODER = 'qwen_2.5_vl_7b_fp8_scaled.safetensors';
 export const EDIT_VAE = 'qwen_image_vae.safetensors';
 /** Base-model Lightning: part of the qwen bundle, the fallback fast path. */
 export const EDIT_LIGHTNING = 'Qwen-Image-Lightning-8steps-V1.0.safetensors';
@@ -69,7 +70,7 @@ export function buildEditGraph(p: EditParams): Record<string, unknown> {
   const steps = p.steps ?? (draft ? 8 : 20);
   const g: Record<string, unknown> = {
     u: { class_type: 'UNETLoader', inputs: { unet_name: EDIT_MODEL, weight_dtype: 'default' } },
-    c: { class_type: 'CLIPLoader', inputs: { clip_name: EDIT_ENCODER, type: 'qwen_image', device: 'default' } },
+    c: { class_type: 'CLIPLoader', inputs: { clip_name: textEncoder('qwen'), type: 'qwen_image', device: 'default' } },
     v: { class_type: 'VAELoader', inputs: { vae_name: EDIT_VAE } },
     norm: { class_type: 'CFGNorm', inputs: { model: ['ms', 0], strength: 1 } },
   };

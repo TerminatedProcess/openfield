@@ -15,6 +15,8 @@
  * Your own LoRAs chain after the model (and after the draft distill).
  */
 
+import { textEncoder } from './encoders.js';
+
 export interface StillsParams {
   model: 'qwen' | 'flux2';
   quality: 'draft' | 'quality';
@@ -51,7 +53,7 @@ function qwenGraph(p: StillsParams): Record<string, unknown> {
   const g0: Record<string, unknown> = {};
   const g: Record<string, unknown> = {
     u: { class_type: 'UNETLoader', inputs: { unet_name: 'qwen_image_fp8_e4m3fn.safetensors', weight_dtype: 'default' } },
-    c: { class_type: 'CLIPLoader', inputs: { clip_name: 'qwen_2.5_vl_7b_fp8_scaled.safetensors', type: 'qwen_image', device: 'default' } },
+    c: { class_type: 'CLIPLoader', inputs: { clip_name: textEncoder('qwen'), type: 'qwen_image', device: 'default' } },
     v: { class_type: 'VAELoader', inputs: { vae_name: 'qwen_image_vae.safetensors' } },
     pos: { class_type: 'CLIPTextEncode', inputs: { clip: ['c', 0], text: p.prompt } },
     neg: { class_type: 'CLIPTextEncode', inputs: { clip: ['c', 0], text: p.negative ?? '' } },
@@ -95,7 +97,7 @@ function flux2Graph(p: StillsParams): Record<string, unknown> {
   });
   const g: Record<string, unknown> = {
     u: { class_type: 'UNETLoader', inputs: { unet_name: 'flux2_dev_fp8mixed.safetensors', weight_dtype: 'default' } },
-    c: { class_type: 'CLIPLoader', inputs: { clip_name: 'mistral_3_small_flux2_fp4_mixed.safetensors', type: 'flux2', device: 'default' } },
+    c: { class_type: 'CLIPLoader', inputs: { clip_name: textEncoder('flux2'), type: 'flux2', device: 'default' } },
     v: { class_type: 'VAELoader', inputs: { vae_name: 'flux2-vae.safetensors' } },
     pos: { class_type: 'CLIPTextEncode', inputs: { clip: ['c', 0], text: p.prompt } },
     fg: { class_type: 'FluxGuidance', inputs: { conditioning: cond, guidance: 4 } },

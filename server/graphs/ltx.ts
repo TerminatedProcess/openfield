@@ -7,6 +7,8 @@
  * plus one optional extra LoRA on top of the distilled one.
  */
 
+import { textEncoder } from './encoders.js';
+
 export interface LtxParams {
   prompt: string;
   width: number;    // final output size (stage 1 runs at half)
@@ -24,7 +26,6 @@ export interface LtxParams {
   startImage?: string;        // input-folder filename → i2v; absent → t2v
 }
 
-const GEMMA = 'gemma_3_12B_it_fp4_mixed.safetensors';
 /** Official base checkpoint — donor for VAE/audio-VAE/text-encoder projection
  *  when the selected model file is transformer-only. */
 const DONOR_CKPT = 'ltx-2.3-22b-dev-fp8.safetensors';
@@ -70,7 +71,7 @@ export function buildLtxGraph(p: LtxParams): Record<string, unknown> {
   Object.assign(g, {
     enc: {
       class_type: 'LTXAVTextEncoderLoader',
-      inputs: { text_encoder: GEMMA, ckpt_name: vaeCkptName, device: 'default' },
+      inputs: { text_encoder: textEncoder('gemma3'), ckpt_name: vaeCkptName, device: 'default' },
     },
     avae: { class_type: 'LTXVAudioVAELoader', inputs: { ckpt_name: vaeCkptName } },
     pos: { class_type: 'CLIPTextEncode', inputs: { clip: ['enc', 0], text: p.prompt } },

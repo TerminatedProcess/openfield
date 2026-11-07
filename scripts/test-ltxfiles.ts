@@ -17,6 +17,7 @@ import { ROOT } from '../server/config.js';
 import { LTX25_ENV, LTX25_STOCK, clearLtx25Overrides, ltx25Files, ltx25Overrides, type Ltx25Slot } from '../server/graphs/ltxfiles.js';
 import { buildLtx25Graph } from '../server/graphs/ltx25.js';
 import { H3_TEXT_ENCODER_ENV } from '../server/graphs/h3.js';
+import { ENCODER_ENV, ENCODER_SLOTS, ENCODER_STOCK, clearEncoderOverrides, textEncoder, type EncoderSlot } from '../server/graphs/encoders.js';
 import { BUNDLES, activeBundles, type Bundle } from '../server/models.js';
 import { reasonFor, statusFor } from '../server/preflight.js';
 import { ENTRIES, OUT } from './export-workflows.js';
@@ -46,9 +47,10 @@ const CUSTOM: Record<Ltx25Slot, string> = {
 const setOverrides = () => { for (const s of SLOTS) process.env[LTX25_ENV[s]] = CUSTOM[s]; };
 
 // This machine's .env may set overrides; every check starts from none
-// (the H3 text encoder too: the committed H3 workflows name the stock one).
+// (the H3 and other text encoders too: the committed workflows name the stock ones).
 clearLtx25Overrides();
 delete process.env[H3_TEXT_ENCODER_ENV];
+clearEncoderOverrides();
 
 // ------------------------------------------------------------ module ----
 console.log('\nltxfiles.ts');
@@ -233,6 +235,60 @@ check('the message for a missing stock file still points at npm run models', () 
   assert.match(msg, /npm run models/);
   assert.doesNotMatch(msg, /set by/);
 });
+
+// ------------------------------------------------------ text encoders ----
+console.log('\nencoders.ts (Qwen, FLUX.2, Z-Image, Gemma 3 text encoders)');
+
+const ENC_CUSTOM = Object.fromEntries(ENCODER_SLOTS.map((s) => [s, `abl\\${s}-abliterated.safetensors`])) as Record<EncoderSlot, string>;
+
+check('each encoder is stock unless its variable names another', () => {
+  for (const s of ENCODER_SLOTS) {
+    assert.equal(textEncoder(s, {}), ENCODER_STOCK[s]);
+    assert.equal(textEncoder(s, { [ENCODER_ENV[s]]: '  ' }), ENCODER_STOCK[s]);
+    assert.equal(textEncoder(s, { [ENCODER_ENV[s]]: ` ${ENC_CUSTOM[s]} ` }), ENC_CUSTOM[s]);
+  }
+});
+
+check('every stock encoder is in a bundle, and activeBundles() swaps it everywhere without a download', () => {
+  const env: NodeJS.ProcessEnv = {};
+  for (const s of ENCODER_SLOTS) env[ENCODER_ENV[s]] = ENC_CUSTOM[s];
+  const act = activeBundles(env);
+  for (const s of ENCODER_SLOTS) {
+    const ids = BUNDLES.filter((b) => b.files.some((f) => f.file === ENCODER_STOCK[s])).map((b) => b.id);
+    assert.ok(ids.length, `${s}: no bundle holds ${ENCODER_STOCK[s]}`);
+    for (const id of ids) {
+      const files = act.find((b) => b.id === id)!.files;
+      assert.ok(!files.some((f) => f.file === ENCODER_STOCK[s]), `${id} still lists ${ENCODER_STOCK[s]}`);
+      const f = files.find((x) => x.file === ENC_CUSTOM[s])!;
+      assert.equal(f.override, ENCODER_ENV[s]);
+      assert.equal(f.gb, 0);
+    }
+  }
+});
+
+for (const s of ENCODER_SLOTS) process.env[ENCODER_ENV[s]] = ENC_CUSTOM[s];
+try {
+  check('with encoder overrides no graph loads a stock encoder, and each workflow that did now loads the configured one', () => {
+    const left: string[] = [];
+    let swapped = 0;
+    for (const e of ENTRIES) {
+      const before = stock.get(e.file)!;
+      const after = built(e);
+      for (const s of ENCODER_SLOTS) {
+        const name = JSON.stringify(ENCODER_STOCK[s]);
+        if (after.includes(name)) left.push(`${e.file}: ${ENCODER_STOCK[s]}`);
+        if (before.includes(name)) {
+          assert.equal(after, before.split(name).join(JSON.stringify(ENC_CUSTOM[s])), e.file);
+          swapped++;
+        }
+      }
+    }
+    assert.deepEqual(left, []);
+    assert.ok(swapped > 0);
+  });
+} finally {
+  clearEncoderOverrides();
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

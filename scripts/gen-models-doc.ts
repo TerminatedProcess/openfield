@@ -7,6 +7,8 @@ import { writeFileSync } from 'fs';
 import { join } from 'path';
 import { BUNDLES, bundleGb } from '../server/models.js';
 import { LTX25_ENV, LTX25_STOCK, type Ltx25Slot } from '../server/graphs/ltxfiles.js';
+import { H3_MODELS, H3_TEXT_ENCODER_ENV } from '../server/graphs/h3.js';
+import { ENCODER_ENV, ENCODER_SLOTS, ENCODER_STOCK } from '../server/graphs/encoders.js';
 import { ROOT } from '../server/config.js';
 
 // Shared files (the edit bundle reuses qwen's encoder, VAE and LoRA) count once.
@@ -99,6 +101,26 @@ lines.push(
   'IC-LoRAs (Effects, Mirror, Reshoot, Cast, Stage, HDR) are made for the stock',
   'distilled model. A model with LoRAs merged in can behave differently under those',
   'IC-LoRAs; try each app you use. `npm run workflows` always writes the stock names.',
+  '',
+);
+
+// The other swappable text encoders: server/graphs/h3.ts and server/graphs/encoders.ts.
+const bundlesWith = (file: string) => BUNDLES.filter((b) => b.files.some((f) => f.file === file)).map((b) => `\`${b.id}\``).join(', ');
+lines.push(
+  '## Other text encoders',
+  '',
+  'The text encoders below can be swapped the same way, for example for an',
+  'abliterated build or another quantization (the LTX-2.5 one is',
+  '`OPENFIELD_LTX25_TEXT_ENCODER` above). Each file must keep the architecture of the',
+  'one it replaces. Every bundle that holds the stock file uses the configured one.',
+  '',
+  '| Variable | Replaces | Bundles |',
+  '| --- | --- | --- |',
+  `| \`${H3_TEXT_ENCODER_ENV}\` | \`${H3_MODELS.clip}\` | ${bundlesWith(H3_MODELS.clip)} |`,
+  ...ENCODER_SLOTS.map((s) => `| \`${ENCODER_ENV[s]}\` | \`${ENCODER_STOCK[s]}\` | ${bundlesWith(ENCODER_STOCK[s])} |`),
+  '',
+  'Put the file in `models/text_encoders/` and give its name as ComfyUI lists it.',
+  'It is checked for, never downloaded.',
   '',
 );
 

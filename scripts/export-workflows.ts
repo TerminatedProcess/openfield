@@ -28,6 +28,7 @@ import { buildMirrorGraph, type MirrorControl } from '../server/graphs/mirror.js
 import { buildReshootGraph, buildReshootWarpPreviewGraph } from '../server/graphs/reshoot.js';
 import { buildDreamGraph, buildRedrawGraph, buildSharpenGraph, redrawBatch } from '../server/graphs/upscale.js';
 import { H3_TEXT_ENCODER_ENV, buildH3Graph, snapH3Length } from '../server/graphs/h3.js';
+import { clearEncoderOverrides } from '../server/graphs/encoders.js';
 import { buildLtxGraph } from '../server/graphs/ltx.js';
 import { EFFECTS, effectPrompt } from '../src/effects.js';
 import { buildExtendGraph, buildSoundGraph, buildSpeakGraph, buildTransitionGraph } from '../server/graphs/ltxtools.js';
@@ -571,9 +572,11 @@ function writeAll(): void {
 // Run as `npm run workflows`; scripts/test-ltxfiles.ts imports ENTRIES without writing anything.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   // These files are the shared examples in the repo: always the stock LTX-2.5
-  // and H3 weights, whatever this machine's .env sets (server/graphs/ltxfiles.ts,
-  // H3_TEXT_ENCODER_ENV in server/graphs/h3.ts).
+  // and H3 weights and text encoders, whatever this machine's .env sets
+  // (server/graphs/ltxfiles.ts, H3_TEXT_ENCODER_ENV in server/graphs/h3.ts,
+  // server/graphs/encoders.ts).
   clearLtx25Overrides();
   delete process.env[H3_TEXT_ENCODER_ENV];
+  clearEncoderOverrides();
   writeAll();
 }

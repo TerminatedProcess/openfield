@@ -398,3 +398,21 @@ Use weights that keep the LTX-2.5 architecture: the graphs, step counts and
 IC-LoRAs (Effects, Mirror, Reshoot, Cast, Stage, HDR) are made for the stock
 distilled model. A model with LoRAs merged in can behave differently under those
 IC-LoRAs; try each app you use. `npm run workflows` always writes the stock names.
+
+## Other text encoders
+
+The text encoders below can be swapped the same way, for example for an
+abliterated build or another quantization (the LTX-2.5 one is
+`OPENFIELD_LTX25_TEXT_ENCODER` above). Each file must keep the architecture of the
+one it replaces. Every bundle that holds the stock file uses the configured one.
+
+| Variable | Replaces | Bundles |
+| --- | --- | --- |
+| `OPENFIELD_H3_TEXT_ENCODER` | `qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors` | `h3` |
+| `OPENFIELD_QWEN_TEXT_ENCODER` | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `qwen`, `edit` |
+| `OPENFIELD_FLUX2_TEXT_ENCODER` | `mistral_3_small_flux2_fp4_mixed.safetensors` | `flux2` |
+| `OPENFIELD_ZIMAGE_TEXT_ENCODER` | `qwen_3_4b.safetensors` | `stage-look` |
+| `OPENFIELD_GEMMA3_TEXT_ENCODER` | `gemma_3_12B_it_fp4_mixed.safetensors` | `ltx23` |
+
+Put the file in `models/text_encoders/` and give its name as ComfyUI lists it.
+It is checked for, never downloaded.

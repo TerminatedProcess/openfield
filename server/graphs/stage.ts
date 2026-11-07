@@ -22,10 +22,10 @@
  */
 import { UPSCALER } from './ltx25.js';
 import { ltx25Files } from './ltxfiles.js';
+import { textEncoder } from './encoders.js';
 
 export const LAYOUT_LORA = 'ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors';
 export const ZIMAGE_MODEL = 'z_image_turbo_bf16.safetensors';
-export const ZIMAGE_ENCODER = 'qwen_3_4b.safetensors';
 export const ZIMAGE_VAE = 'ae.safetensors';
 export const ZIMAGE_CONTROL = 'Z-Image-Turbo-Fun-Controlnet-Union.safetensors';
 
@@ -123,7 +123,7 @@ export interface StageLookParams {
 /** Z-Image Turbo + Fun ControlNet Union on the depth pass: 9 steps, CFG 1. */
 export function buildStageLookGraph(p: StageLookParams): Record<string, unknown> {
   return {
-    clip: { class_type: 'CLIPLoader', inputs: { clip_name: ZIMAGE_ENCODER, type: 'lumina2', device: 'default' } },
+    clip: { class_type: 'CLIPLoader', inputs: { clip_name: textEncoder('zimage'), type: 'lumina2', device: 'default' } },
     unet: { class_type: 'UNETLoader', inputs: { unet_name: ZIMAGE_MODEL, weight_dtype: 'default' } },
     vae: { class_type: 'VAELoader', inputs: { vae_name: ZIMAGE_VAE } },
     control: { class_type: 'ModelPatchLoader', inputs: { name: ZIMAGE_CONTROL } },

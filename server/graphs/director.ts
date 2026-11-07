@@ -18,6 +18,7 @@
  * feed CreateVideo (or SaveImage for a still) and splices the passes in front.
  */
 import { rampPlan, type EraGrade, type RampId } from '../../src/catalog.js';
+import { textEncoder } from './encoders.js';
 
 type Ref = [string, number];
 type Graph = Record<string, any>;
@@ -174,9 +175,6 @@ export function applyPost(g: Graph, o: PostOpts): { outFrames?: number; silent: 
 
 // ---------------------------------------------------------------- shot list
 
-/** The Gemma 3 12B text encoder of LTX-2.0. It doubles as a working LLM. */
-export const PLANNER_ENCODER = 'gemma_3_12B_it_fp4_mixed.safetensors';
-
 export const PLANNER_SYSTEM = (n: { min: number; max: number }, framings: string[], moves: string[]) => [
   'You are a film director planning coverage. Split the user\'s scene into a shot list that tells it in order.',
   `Use ${n.min} to ${n.max} shots. Vary the framing from shot to shot.`,
@@ -198,7 +196,7 @@ export interface PlannerParams {
 
 export function buildPlannerGraph(p: PlannerParams): Graph {
   return {
-    clip: { class_type: 'CLIPLoader', inputs: { clip_name: p.encoder ?? PLANNER_ENCODER, type: 'ltxv', device: 'default' } },
+    clip: { class_type: 'CLIPLoader', inputs: { clip_name: p.encoder ?? textEncoder('gemma3'), type: 'ltxv', device: 'default' } },
     sys: { class_type: 'PrimitiveStringMultiline', inputs: { value: p.system } },
     gen: {
       class_type: 'TextGenerateLTX2Prompt',

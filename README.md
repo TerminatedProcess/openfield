@@ -241,6 +241,7 @@ All optional, in `.env` (see [`.env.example`](.env.example)):
 | `WHISPER_BIN` | | openai-whisper CLI: video takes with speech get a transcript |
 | `SPICE_DIR` | | Extra folder of LTX-2.3 community checkpoints for the legacy engine |
 | `OPENFIELD_LTX25_TRANSFORMER`, `_TEXT_ENCODER`, `_VIDEO_VAE`, `_AUDIO_VAE` | the stock Lightricks files | Other LTX-2.5 weights, by the name ComfyUI lists them under (see [`docs/MODELS.md`](docs/MODELS.md#other-ltx-25-weights)) |
+| `OPENFIELD_H3_TEXT_ENCODER`, `OPENFIELD_QWEN_TEXT_ENCODER`, `OPENFIELD_FLUX2_TEXT_ENCODER`, `OPENFIELD_ZIMAGE_TEXT_ENCODER`, `OPENFIELD_GEMMA3_TEXT_ENCODER` | the stock encoders | Another text encoder (an abliterated build, another quantization) for H3, Qwen-Image/Edit, FLUX.2, Z-Image, LTX-2.3/planner (see [`docs/MODELS.md`](docs/MODELS.md#other-text-encoders)) |
 
 ## Adding an app
 
