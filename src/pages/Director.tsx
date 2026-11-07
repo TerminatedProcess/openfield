@@ -16,6 +16,7 @@ import {
 import { setParams, useRoute } from '../router';
 import { isActive, isImage, settingsOf, toast, useStore, inFeed } from '../store';
 import { ChipMenu, Icon, MediaCard, useClickAway, Stepper, Switch, fmtSeconds, useEstimate, Spill, presetClip, TierChip, useTierChoice } from '../ui';
+import { secondsToFrames } from '../presets';
 import Viewer, { recreate, remove } from '../Viewer';
 import { MentionBox } from '../Mention';
 import { useCast } from '../castStore';
@@ -67,7 +68,7 @@ export default function DirectorPage() {
   const shotSecs = toShoot.length ? Math.round(toShoot.reduce((n, s) => n + s.seconds, 0) / toShoot.length) : seconds;
   const est = useEstimate(mode === 'image'
     ? { kind: 'still', model: imageModel, quality: 'quality', w: size.w, h: size.h }
-    : { kind: 'video', model: 'ltx25', w: size.w, h: size.h, seconds: mode === 'scene' ? shotSecs : seconds });
+    : { kind: 'video', model: 'h3', w: size.w, h: size.h, seconds: mode === 'scene' ? shotSecs : seconds });
   const takes = useStore((s) => s.takes.filter((t) => {
     const st = settingsOf(t);
     return inFeed(t) && st.app === 'director' && !st.sceneOf && (mode === 'scene' ? !!st.cut : !st.cut);
@@ -119,7 +120,7 @@ export default function DirectorPage() {
       const common = { app: 'director', scene, picks, era, eraGrade: grade, userPrompt: scene || compiled, prompt: compiled, width: size.w, height: size.h, count, shotName: (scene || 'director').slice(0, 40) };
       const r = mode === 'image'
         ? await api.generate({ ...common, kind: 'still', model: imageModel, quality: 'quality' })
-        : await api.generate({ ...common, kind: 'video', videoModel: 'ltx25', seconds, withAudio: audio, startImage: hero?.token, preset: move, presetName: presetById(move).name, ramp });
+        : await api.generate({ ...common, kind: 'video', videoModel: 'h3', seconds, lengthFrames: secondsToFrames(seconds), withAudio: audio, startImage: hero?.token, preset: move, presetName: presetById(move).name, ramp });
       toast(`Queued ${r.takeIds.length} ${mode === 'image' ? 'frame' : 'shot'}${r.takeIds.length > 1 ? 's' : ''}`);
     } catch (e) {
       toast(e instanceof Error ? e.message : 'failed', true);
@@ -555,7 +556,7 @@ function ShotCard(p: {
 
 /**
  * The cast members a shot holds. The server starts such a shot from a Cast
- * hero frame of them (castHeroSeam in server/scene.ts), then shoots it with LTX.
+ * hero frame of them (castHeroSeam in server/scene.ts), then shoots it with MiniMax H3.
  */
 function ShotCast(p: { ids: number[]; onChange: (ids: number[]) => void }) {
   const cast = useCast();

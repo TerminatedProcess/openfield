@@ -183,7 +183,7 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
     const compiled = compilePrompt([moveText, c.scene, direction.join(', ')]);
     const size = expr(sizeSrc, { mode, sizeFor, aspect: c.aspect, videoFrame, res: appTier('director', c.res) });
     const common = expr(commonSrc, { scene: c.scene, picks, era: c.era, grade: c.grade, compiled, size, count: c.count });
-    const oracle = expr(mode === 'image' ? m![1] : m![2], { common, imageModel: c.imageModel, seconds: c.seconds, audio: c.audio, hero, move: c.move, presetById, ramp: c.ramp });
+    const oracle = expr(mode === 'image' ? m![1] : m![2], { common, imageModel: c.imageModel, seconds: c.seconds, audio: c.audio, hero, move: c.move, presetById, ramp: c.ramp, secondsToFrames });
     const mine = directorBody({ mode: c.mode, scene: c.scene, picks, era: c.era, grade: c.grade, ramp: c.ramp, aspect: c.aspect, count: c.count, imageModel: c.imageModel, move: c.move, seconds: c.seconds, audio: c.audio, heroImage: hero?.token, res: c.res });
     same(c.name, mine, oracle);
   }

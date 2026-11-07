@@ -833,13 +833,15 @@ async function graphFor(b: any, seed: number): Promise<Built> {
 function directorPost(b: any, graph: Record<string, unknown>): Record<string, unknown> | undefined {
   const still = b.kind === 'still';
   const ltx = b.kind === 'video' && b.videoModel === 'ltx25';
-  if (!still && !ltx) return undefined;
+  const h3 = b.kind === 'video' && b.videoModel === 'h3' && b.app === 'director';
+  if (!still && !ltx && !h3) return undefined;
   const era = b.era == null || b.era === '' || !Number.isFinite(Number(b.era)) ? null : clampEra(Number(b.era));
   const grade = era != null && b.eraGrade !== false ? eraGrade(era) : undefined;
-  const ramp = ltx && isRamp(b.ramp) && b.ramp !== 'linear' ? b.ramp : undefined;
+  const ramp = (ltx || h3) && isRamp(b.ramp) && b.ramp !== 'linear' ? b.ramp : undefined;
   if (!grade && !ramp) return undefined;
   const fps = b.fps || LTX25_FPS;
-  const frames = ltx ? snapFrames(Math.max(1, Math.min(20, b.seconds || 5)), fps) : undefined;
+  const frames = h3 ? snapH3Length(b.lengthFrames || 124)
+    : ltx ? snapFrames(Math.max(1, Math.min(20, b.seconds || 5)), fps) : undefined;
   const r = applyPost(graph as Record<string, any>, { grade, ramp, frames });
   return {
     era, eraGraded: !!grade,

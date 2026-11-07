@@ -187,7 +187,7 @@ export function directorBody(o: DirectorOpts): Body {
   const common = { app: 'director', scene, picks, era, eraGrade: o.grade ?? true, userPrompt: scene || compiled, prompt: compiled, width: size.w, height: size.h, count, shotName: (scene || 'director').slice(0, 40) };
   return o.mode === 'frame'
     ? { ...common, kind: 'still', model: o.imageModel, quality: 'quality' }
-    : { ...common, kind: 'video', videoModel: 'ltx25', seconds: o.seconds, withAudio: o.audio, startImage: o.heroImage, preset: o.move, presetName: presetById(o.move).name, ramp: o.ramp ?? 'linear' };
+    : { ...common, kind: 'video', videoModel: 'h3', seconds: o.seconds, lengthFrames: secondsToFrames(o.seconds), withAudio: o.audio, startImage: o.heroImage, preset: o.move, presetName: presetById(o.move).name, ramp: o.ramp ?? 'linear' };
 }
 
 export interface SceneShotIn { framing: string; move: string; action: string; seconds: number; ramp?: RampId; cast?: number[] }

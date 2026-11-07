@@ -10,7 +10,7 @@
  *            hold the engine planner for minutes.
  *   shoot    the cut is a take of its own. Its settings hold the shot list,
  *            and each shot records the takes made for it (a Qwen hero frame
- *            when asked for, then the LTX shot). Shots are ordinary takes
+ *            when asked for, then the H3 shot). Shots are ordinary takes
  *            tagged with `sceneOf`. Whenever one finishes, advance() moves the
  *            scene on: a finished hero frame queues its shot, and when every
  *            shot is done the cut graph joins them. State lives in the
@@ -30,6 +30,7 @@ import { config } from './config.js';
 import { cast as castDb, takes, type Take } from './jobs.js';
 import { castHeroFrame, mentioned } from './cast.js';
 import { ENCODER_ENV, encoderOverride, textEncoder } from './graphs/encoders.js';
+import { secondsToFrames } from '../src/presets.js';
 import { buildCutGraph, buildPlannerGraph, PLANNER_SYSTEM, type CutClip } from './graphs/director.js';
 import { parseShotList, partialShots, snapFraming, snapMove, snapSeconds, splitScene } from './shotlist.js';
 import {
@@ -467,7 +468,7 @@ function shotBody(r: SceneRequest, cutId: number, i: number, startImage?: string
   const s = r.shots[i];
   const direction = shotDirection(r);
   return {
-    app: 'director', kind: 'video', videoModel: 'ltx25',
+    app: 'director', kind: 'video', videoModel: 'h3', lengthFrames: secondsToFrames(s.seconds),
     scene: r.scene, picks: { ...r.picks, framing: s.framing }, era: r.era, eraGrade: r.eraGrade,
     ramp: s.ramp ?? r.ramp, preset: s.move, presetName: presetById(s.move).name,
     prompt: shotPrompt(s, direction), userPrompt: s.action,
@@ -539,7 +540,7 @@ const liveCastHeroes = new Set<string>();
 /**
  * CAST SEAM. A shot with `cast` ids starts from a Cast hero frame of those
  * members (castHeroFrame in ./cast.ts: a Qwen-Image-Edit still composed from
- * their pictures, an ordinary take), then LTX shoots the shot from it.
+ * their pictures, an ordinary take), then MiniMax H3 shoots the shot from it.
  *
  * The shot is marked `castHero` before anything is awaited, so step() leaves
  * it alone while the frame renders, and `hero` is set the moment the frame is
