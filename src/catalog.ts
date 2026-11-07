@@ -250,6 +250,7 @@ export const DIRECTOR_AXES: DirectorAxis[] = [
     { id: 'comedy', label: 'Comedy', text: 'bright comedy, playful timing, warm and open frames, expressive faces', sets: { camera: 'wide-prime', light: 'golden', grade: 'pastel' } },
     { id: 'epic', label: 'Epic', text: 'sweeping epic, mythic scale, vast landscapes and tiny figures against them', sets: { camera: 'anamorphic', light: 'golden', look: 'epic' } },
     { id: 'scifi', label: 'Sci-fi', text: 'science fiction, cold engineered spaces, the future made physical', sets: { light: 'neon', look: 'scifi', grade: 'steel' } },
+    { id: 'erotic', label: 'Erotic', text: 'sensual erotic film, intimate desire, lingering touch and skin, slow charged glances', sets: { camera: 'large-format', light: 'candle', look: 'dream', grade: 'pastel' } },
   ]},
   { id: 'camera', label: 'Camera', icon: 'camera', options: [
     { id: 'auto', label: 'Auto', text: '' },
