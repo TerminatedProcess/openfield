@@ -1,10 +1,10 @@
 /**
  * Director scenes: one scene in, a shot list, N shot renders, one cut out.
  *
- *   plan     the shot list from a local LLM. First the engine itself
+ *   plan     the shot list from a local LLM. First an OpenAI-compatible
+ *            server when OPENFIELD_LLM_URL names one, then the engine itself
  *            (TextGenerateLTX2Prompt on the Gemma 3 12B encoder, see
- *            ./graphs/director.ts), then an OpenAI-compatible server when
- *            OPENFIELD_LLM_URL names one, then Ollama when it answers on this
+ *            ./graphs/director.ts), then Ollama when it answers on this
  *            machine, then a plain sentence split so a scene always plans.
  *            Runs as a background job the client polls; a busy GPU queue can
  *            hold the engine planner for minutes.
@@ -352,7 +352,7 @@ export function startPlan(scene: string, opts: { shots?: number; planner?: strin
     : opts.planner === 'llm' ? ['llm']
     : opts.planner === 'ollama' ? ['ollama']
     : opts.planner === 'split' ? []
-    : LLM ? ['engine', 'llm', 'ollama'] : ['engine', 'ollama'];
+    : LLM ? ['llm', 'engine', 'ollama'] : ['engine', 'ollama'];
   const progress: PlanProgress = (u) => Object.assign(plan, u);
   const settle = (u: Partial<Plan>) => Object.assign(plan, { stage: undefined, model: undefined, phase: undefined, partial: undefined }, u);
   void (async () => {
