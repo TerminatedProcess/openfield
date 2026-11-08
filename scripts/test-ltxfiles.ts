@@ -295,7 +295,9 @@ try {
 // ------------------------------------------------------- Qwen-Image ----
 console.log('\nstills.ts (Qwen-Image diffusion model)');
 
-const qwenStill = () => buildStillsGraph({ model: 'qwen', quality: 'quality', prompt: 'x', width: 1024, height: 1024, seed: 1 }) as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+type G = Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+const qwenStill = (o: { quality?: 'draft' | 'quality'; qwenModel?: string; loras?: { name: string; strength: number }[] } = {}) =>
+  buildStillsGraph({ model: 'qwen', quality: o.quality ?? 'quality', prompt: 'x', width: 1024, height: 1024, seed: 1, qwenModel: o.qwenModel, loras: o.loras }) as G;
 
 try {
   check('Qwen-Image is stock unless OPENFIELD_QWEN_IMAGE_MODEL names another; .gguf loads through UnetLoaderGGUF', () => {
@@ -304,6 +306,35 @@ try {
     assert.deepEqual(qwenStill().u, { class_type: 'UNETLoader', inputs: { unet_name: 'tune\\qwen-tune_nvfp4.safetensors', weight_dtype: 'default' } });
     process.env[QWEN_IMAGE_ENV] = 'qwen-tune-Q4_K_M.GGUF';
     assert.deepEqual(qwenStill().u, { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'qwen-tune-Q4_K_M.GGUF' } });
+  });
+
+  check('a take\'s qwenModel beats the default; a Nunchaku file loads through ComfyUI-nunchaku', () => {
+    process.env[QWEN_IMAGE_ENV] = 'qwen-tune.gguf';
+    assert.equal(qwenStill({ qwenModel: 'other.safetensors' }).u.class_type, 'UNETLoader');
+    const g = qwenStill({ qwenModel: 'nunchaku_qwen_image_2512_balance_int4.safetensors' });
+    assert.equal(g.u.class_type, 'NunchakuQwenImageDiTLoader');
+    assert.equal(g.u.inputs.model_name, 'nunchaku_qwen_image_2512_balance_int4.safetensors');
+    assert.deepEqual(g.k.inputs.model, ['u', 0]);
+    assert.ok(!Object.values(g).some((n) => n.class_type === 'LoraLoaderModelOnly'));
+  });
+
+  check('on a Nunchaku model, Draft and your LoRAs go through one LoRA stack node, distill first', () => {
+    const g = qwenStill({ qwenModel: 'svdq-int4_r128-qwen-image.safetensors', quality: 'draft', loras: [{ name: 'a.safetensors', strength: 0.8 }] });
+    assert.ok(!Object.values(g).some((n) => n.class_type === 'LoraLoaderModelOnly'));
+    assert.equal(g.lora.class_type, 'NunchakuQwenImageLoraStackV3');
+    assert.deepEqual(g.lora.inputs.model, ['u', 0]);
+    assert.equal(g.lora.inputs.lora_count, 2);
+    assert.equal(g.lora.inputs.lora_name_1, 'Qwen-Image-Lightning-8steps-V1.0.safetensors');
+    assert.equal(g.lora.inputs.lora_name_2, 'a.safetensors');
+    assert.equal(g.lora.inputs.lora_strength_2, 0.8);
+    assert.deepEqual(g.k.inputs.model, ['lora', 0]);
+  });
+
+  check('on a regular model, Draft chains the distill then your LoRAs as before', () => {
+    const g = qwenStill({ quality: 'draft', loras: [{ name: 'a.safetensors', strength: 0.8 }] });
+    assert.equal(g.lora.class_type, 'LoraLoaderModelOnly');
+    assert.deepEqual(g.ulora0.inputs.model, ['lora', 0]);
+    assert.deepEqual(g.k.inputs.model, ['ulora0', 0]);
   });
 
   check('activeBundles() swaps the stock Qwen-Image model everywhere without a download', () => {

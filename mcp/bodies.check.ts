@@ -142,15 +142,18 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
     { name: 'image qwen 16:9 1K', model: 'qwen', prompt: 'a poster that says OPENFIELD in bold type', aspect: '16:9', quality: 'quality', res: '1K', count: 1 },
     { name: 'image flux2 9:16 2K draft x3', model: 'flux2', prompt: 'a paper lantern over tall grass at night', aspect: '9:16', quality: 'draft', res: '2K', count: 3 },
     { name: 'image qwen + your LoRA', model: 'qwen', prompt: 'a red door', aspect: '1:1', quality: 'draft', res: '1K', count: 1, loras: [{ name: 'my-style.safetensors', strength: 0.8 }] },
+    { name: 'image qwen + chosen Qwen model', model: 'qwen', prompt: 'a red door', aspect: '1:1', quality: 'quality', res: '1K', count: 1, qwenModel: 'qwenOvercooked_nvfp4mixed.safetensors' },
+    { name: 'image flux2 ignores a Qwen model', model: 'flux2', prompt: 'a red door', aspect: '1:1', quality: 'quality', res: '1K', count: 1, qwenModel: 'qwenOvercooked_nvfp4mixed.safetensors' },
     { name: 'image flux2 refs + LoRAs', model: 'flux2', prompt: 'the man in image 1 at a bus stop', aspect: '16:9', quality: 'quality', res: '1K', count: 2,
       loras: [{ name: 'a.safetensors', strength: 1 }, { name: 'b.safetensors', strength: -0.4 }], refs: [{ token: 'asset:r1', name: 'r1.png' }, { token: 'asset:r2', name: 'r2.png' }] },
-  ] as { name: string; model: 'qwen' | 'flux2'; prompt: string; aspect: any; quality: 'draft' | 'quality'; res: any; count: number; loras?: { name: string; strength: number }[]; refs?: { token: string; name: string }[] }[]) {
+  ] as { name: string; model: 'qwen' | 'flux2'; prompt: string; aspect: any; quality: 'draft' | 'quality'; res: any; count: number; loras?: { name: string; strength: number }[]; refs?: { token: string; name: string }[]; qwenModel?: string }[]) {
     const model = IMAGE_MODELS.find((m) => m.id === c.model)!;
     const size = sizeFor(c.aspect, IMAGE_RES.find((r) => r.id === c.res)!.mp);
     const loras = c.loras ?? [];
     const refs = c.refs ?? [];
-    const oracle = expr(bodySrc, { model, quality: c.quality, prompt: c.prompt, size, count: c.count, loras, refs, refsOn: c.model === 'flux2' });
-    same(c.name, imageBody({ model: c.model, prompt: c.prompt, aspect: c.aspect, quality: c.quality, res: c.res, count: c.count, loras, refImages: refs.map((r) => r.token) }), oracle);
+    const qwenModel = c.qwenModel ?? '';
+    const oracle = expr(bodySrc, { model, quality: c.quality, prompt: c.prompt, size, count: c.count, loras, refs, refsOn: c.model === 'flux2', qwenModel });
+    same(c.name, imageBody({ model: c.model, prompt: c.prompt, aspect: c.aspect, quality: c.quality, res: c.res, count: c.count, loras, refImages: refs.map((r) => r.token), qwenModel: c.qwenModel }), oracle);
   }
   assert.ok(src.includes("const refsOn = model.id === 'flux2';"), 'Image.tsx: references are FLUX.2 only');
   assert.throws(() => imageBody({ model: 'qwen', prompt: 'x', aspect: '1:1', quality: 'draft', res: '1K', count: 1, refImages: ['asset:r'] }), /need model flux2/);
@@ -170,7 +173,7 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
   const { directorDirection } = catalog;
   for (const c of [
     { name: 'director frame, picks', mode: 'frame', scene: 'a lighthouse keeper climbs the stairs with a lantern as the storm hits', picks: { camera: 'anamorphic', light: 'candle', film: '500t', grade: 'teal' }, era: null, grade: true, ramp: 'linear', aspect: '21:9', count: 2, imageModel: 'qwen', move: 'push-in', seconds: 5, audio: false, res: '480p' },
-    { name: 'director frame with loras', mode: 'frame', scene: 'two figures by a door at night', picks: { light: 'candle' }, era: null, grade: true, ramp: 'linear', aspect: '16:9', count: 2, imageModel: 'qwen', move: 'push-in', seconds: 5, audio: false, res: '480p', loras: [{ name: 'a.safetensors', strength: 0.8 }] },
+    { name: 'director frame with loras', mode: 'frame', scene: 'two figures by a door at night', picks: { light: 'candle' }, era: null, grade: true, ramp: 'linear', aspect: '16:9', count: 2, imageModel: 'qwen', move: 'push-in', seconds: 5, audio: false, res: '480p', loras: [{ name: 'a.safetensors', strength: 0.8 }], qwenModel: 'qwenOvercooked_nvfp4mixed.safetensors' },
     { name: 'director frame, no scene, era graded', mode: 'frame', scene: '', picks: { look: 'noir' }, era: 1962, grade: true, ramp: 'linear', aspect: '1:1', count: 4, imageModel: 'flux2', move: 'push-in', seconds: 5, audio: false, res: '720p' },
     { name: 'director shot from hero, genre + era prompt only', mode: 'shot', scene: 'the keeper reaches the lamp room', picks: { ...catalog.pickGenre({}, 'noir'), framing: 'low' }, era: 1974, grade: false, ramp: 'linear', aspect: '16:9', count: 1, imageModel: 'qwen', move: 'crane-up', seconds: 8, audio: true, hero: { token: 'hero.png', take: 7 }, res: '720p' },
     { name: 'director shot from text, bullet time, 480p', mode: 'shot', scene: 'a fox crosses a frozen lake', picks: {}, era: 2003, grade: true, ramp: 'bullet', aspect: '9:16', count: 2, imageModel: 'qwen', move: 'whip-pan', seconds: 3, audio: false, res: '480p' },
@@ -180,13 +183,14 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
     const picks = c.picks as Record<string, string>;
     const hero = 'hero' in c ? c.hero : null;
     const loras = 'loras' in c && c.loras ? [...c.loras] : [];
+    const qwenModel = 'qwenModel' in c ? c.qwenModel : '';
     const direction = expr(dirSrc, { directorDirection, picks, era: c.era });
     const moveText = expr(moveSrc, { mode, presetById, move: c.move });
     const compiled = compilePrompt([moveText, c.scene, direction.join(', ')]);
     const size = expr(sizeSrc, { mode, sizeFor, aspect: c.aspect, videoFrame, res: appTier('director', c.res) });
     const common = expr(commonSrc, { scene: c.scene, picks, era: c.era, grade: c.grade, compiled, size, count: c.count });
-    const oracle = expr(mode === 'image' ? m![1] : m![2], { common, loras, imageModel: c.imageModel, seconds: c.seconds, audio: c.audio, hero, move: c.move, presetById, ramp: c.ramp, secondsToFrames });
-    const mine = directorBody({ mode: c.mode, scene: c.scene, picks, era: c.era, grade: c.grade, ramp: c.ramp, aspect: c.aspect, count: c.count, imageModel: c.imageModel, move: c.move, seconds: c.seconds, audio: c.audio, heroImage: hero?.token, res: c.res, ...(loras.length ? { loras } : {}) });
+    const oracle = expr(mode === 'image' ? m![1] : m![2], { common, loras, qwenModel, imageModel: c.imageModel, seconds: c.seconds, audio: c.audio, hero, move: c.move, presetById, ramp: c.ramp, secondsToFrames });
+    const mine = directorBody({ mode: c.mode, scene: c.scene, picks, era: c.era, grade: c.grade, ramp: c.ramp, aspect: c.aspect, count: c.count, imageModel: c.imageModel, move: c.move, seconds: c.seconds, audio: c.audio, heroImage: hero?.token, res: c.res, ...(loras.length ? { loras } : {}), ...(qwenModel ? { qwenModel } : {}) });
     same(c.name, mine, oracle);
   }
   // Genre through MCP: withGenre fills the axes the genre sets, explicit picks win.

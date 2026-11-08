@@ -19,6 +19,8 @@ import { config } from './config.js';
 /** Loader inputs that load a multi-GB model (diffusion model, checkpoint, text encoder). */
 const HEAVY: Record<string, string[]> = {
   UNETLoader: ['unet_name'],
+  UnetLoaderGGUF: ['unet_name'],
+  NunchakuQwenImageDiTLoader: ['model_name'],
   CheckpointLoaderSimple: ['ckpt_name'],
   CLIPLoader: ['clip_name'],
   LTXAVTextEncoderLoader: ['text_encoder', 'ckpt_name'],

@@ -107,6 +107,8 @@ export interface ImageOpts {
   loras?: LoraPick[];
   /** FLUX.2 only: reference picture tokens (the Refs chip). */
   refImages?: string[];
+  /** Qwen only: the Qwen-Image model (the Qwen model chip); omitted = the server's default. */
+  qwenModel?: string;
 }
 
 /** Image.tsx go(). */
@@ -119,6 +121,7 @@ export function imageBody(o: ImageOpts): Body {
     kind: 'still', model: o.model, quality: o.quality, prompt: o.prompt, userPrompt: o.prompt, width: size.w, height: size.h, count: o.count,
     shotName: o.prompt.slice(0, 40),
     ...(o.loras?.length ? { loras: o.loras } : {}),
+    ...(o.model === 'qwen' && o.qwenModel ? { qwenModel: o.qwenModel } : {}),
     ...(o.refImages?.length ? { refImages: o.refImages } : {}),
   };
 }
@@ -146,6 +149,8 @@ export interface DirectorOpts {
   res: RenderTier;
   /** Frame mode: your own LoRAs for the image model. */
   loras?: LoraPick[];
+  /** Frame mode, Qwen only: the Qwen-Image model; omitted = the server's default. */
+  qwenModel?: string;
 }
 
 function checkPicks(picks: DirectorPicks, skip: string[] = []) {
@@ -187,9 +192,10 @@ export function directorBody(o: DirectorOpts): Body {
   const size = o.mode === 'frame' ? sizeFor(o.aspect, 1.0) : videoFrame(o.aspect, appTier('director', o.res));
   const { scene, picks, count } = o;
   const loras = o.loras ?? [];
+  const { imageModel, qwenModel } = o;
   const common = { app: 'director', scene, picks, era, eraGrade: o.grade ?? true, userPrompt: scene || compiled, prompt: compiled, width: size.w, height: size.h, count, shotName: (scene || 'director').slice(0, 40) };
   return o.mode === 'frame'
-    ? { ...common, kind: 'still', model: o.imageModel, quality: 'quality', ...(loras.length ? { loras } : {}) }
+    ? { ...common, kind: 'still', model: o.imageModel, quality: 'quality', ...(loras.length ? { loras } : {}), ...(imageModel === 'qwen' && qwenModel ? { qwenModel } : {}) }
     : { ...common, kind: 'video', videoModel: 'h3', seconds: o.seconds, lengthFrames: secondsToFrames(o.seconds), withAudio: o.audio, startImage: o.heroImage, preset: o.move, presetName: presetById(o.move).name, ramp: o.ramp ?? 'linear' };
 }
 

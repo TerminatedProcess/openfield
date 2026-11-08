@@ -139,6 +139,9 @@ async function queue(body: Body, extra: Record<string, unknown> = {}) {
 const inputRef = (what: string) =>
   z.string().min(1).describe(`${what}: a local file path (absolute, ~/..., or C:\\... under WSL) or take:<id> to reuse a finished take`);
 const count = z.number().int().min(1).max(4).default(1).describe('How many takes to queue, each with the next seed (1-4)');
+const qwenModel = z.string().min(1).optional()
+  .describe('Qwen-Image model to run (qwen only), a name from GET /api/qwen-models: stock, fine-tunes, GGUF or Nunchaku files. Omitted = the server default (OPENFIELD_QWEN_IMAGE_MODEL, else stock).');
+
 const loras = z.array(z.object({
   name: z.string().min(1).describe('LoRA filename exactly as list_loras shows it'),
   strength: z.number().min(-2).max(2).default(1),
@@ -379,13 +382,14 @@ server.registerTool('generate_image', {
     references: z.array(inputRef('Reference picture')).max(6).optional()
       .describe('flux2 only: up to 6 pictures whose people, clothes and objects carry into a new photograph. Numbered in order, before any @cast pictures.'),
     loras,
+    qwen_model: qwenModel,
   },
   annotations: GPU,
 }, safe(async (a) => {
   const refs = a.references?.length ? await Promise.all(a.references.map((r) => resolveInput(r, 'image'))) : [];
   return queue(wire(imageBody({
     model: a.model, prompt: a.prompt, aspect: a.aspect, quality: a.quality, res: a.resolution, count: a.count,
-    loras: a.loras as LoraPick[] | undefined, refImages: refs.map((r) => r.token),
+    loras: a.loras as LoraPick[] | undefined, refImages: refs.map((r) => r.token), qwenModel: a.qwen_model,
   })));
 }));
 
@@ -446,6 +450,7 @@ server.registerTool('direct_shot', {
     resolution: tierArg('director').describe('Shot mode render size. Default: the machine-wide size from Setup.'),
     count: z.number().int().min(1).max(4).optional().describe('Default 2 frames in frame mode, 1 in shot mode'),
     loras,
+    qwen_model: qwenModel,
   },
   annotations: GPU,
 }, safe(async (a) => {
@@ -457,7 +462,7 @@ server.registerTool('direct_shot', {
   const body = directorBody({
     mode: a.mode, scene: a.scene, picks, era: a.era ?? null, grade: a.era_grade, ramp: a.ramp, aspect: a.aspect, count: a.count ?? (a.mode === 'frame' ? 2 : 1),
     imageModel: a.image_model, move: a.move, seconds: a.seconds, audio: a.audio, heroImage: hero?.token, res: await tierFor('director', a.resolution),
-    loras: a.loras as LoraPick[] | undefined,
+    loras: a.loras as LoraPick[] | undefined, qwenModel: a.qwen_model,
   });
   return queue(wire(body), { picks, era: a.era ?? null, ramp: a.mode === 'shot' ? a.ramp : undefined });
 }));

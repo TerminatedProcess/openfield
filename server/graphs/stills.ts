@@ -20,9 +20,9 @@ import { textEncoder } from './encoders.js';
 /** The Qwen-Image diffusion model the qwen bundle ships. */
 export const QWEN_IMAGE_STOCK = 'qwen_image_fp8_e4m3fn.safetensors';
 /**
- * Another Qwen-Image diffusion model in models/diffusion_models/ (a fine-tune,
- * another quantization), named as ComfyUI lists it. A .gguf name loads through
- * ComfyUI-GGUF's UnetLoaderGGUF. Checked for, never downloaded.
+ * The default Qwen-Image diffusion model when a take names none: another file in
+ * models/diffusion_models/ (a fine-tune, another quantization), named as
+ * ComfyUI lists it. Checked for, never downloaded.
  */
 export const QWEN_IMAGE_ENV = 'OPENFIELD_QWEN_IMAGE_MODEL';
 
@@ -31,12 +31,36 @@ export function qwenImageOverride(env: NodeJS.ProcessEnv = process.env): string 
   return (env[QWEN_IMAGE_ENV] ?? '').trim();
 }
 
-/** The loader node for the Qwen-Image model the stills graph runs. */
-export function qwenImageLoader(env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
-  const name = qwenImageOverride(env) || QWEN_IMAGE_STOCK;
-  return /\.gguf$/i.test(name)
-    ? { class_type: 'UnetLoaderGGUF', inputs: { unet_name: name } }
-    : { class_type: 'UNETLoader', inputs: { unet_name: name, weight_dtype: 'default' } };
+/** The Qwen-Image model a take runs when it names none. */
+export function qwenImageDefault(env: NodeJS.ProcessEnv = process.env): string {
+  return qwenImageOverride(env) || QWEN_IMAGE_STOCK;
+}
+
+/**
+ * How a Qwen-Image file loads, from its name: .gguf through ComfyUI-GGUF,
+ * Nunchaku (SVDQuant) through ComfyUI-nunchaku, anything else through UNETLoader.
+ * Nunchaku's loader lists every diffusion model, so the name is the only signal.
+ */
+export type QwenLoader = 'unet' | 'gguf' | 'nunchaku';
+export function qwenLoaderFor(name: string): QwenLoader {
+  if (/\.gguf$/i.test(name)) return 'gguf';
+  if (/nunchaku|svdq/i.test(name)) return 'nunchaku';
+  return 'unet';
+}
+
+/** Node classes each loader needs; LoRAs on a Nunchaku model need ComfyUI-QwenImageLoraLoader too. */
+export const QWEN_LOADER_NODE: Record<QwenLoader, string> = {
+  unet: 'UNETLoader', gguf: 'UnetLoaderGGUF', nunchaku: 'NunchakuQwenImageDiTLoader',
+};
+export const NUNCHAKU_LORA_NODE = 'NunchakuQwenImageLoraStackV3';
+
+function qwenImageLoader(name: string): Record<string, unknown> {
+  switch (qwenLoaderFor(name)) {
+    case 'gguf': return { class_type: 'UnetLoaderGGUF', inputs: { unet_name: name } };
+    // cpu_offload auto: on below 15 GB of VRAM.
+    case 'nunchaku': return { class_type: 'NunchakuQwenImageDiTLoader', inputs: { model_name: name, cpu_offload: 'auto', num_blocks_on_gpu: 1, use_pin_memory: 'disable' } };
+    default: return { class_type: 'UNETLoader', inputs: { unet_name: name, weight_dtype: 'default' } };
+  }
 }
 
 export interface StillsParams {
@@ -58,6 +82,8 @@ export interface StillsParams {
   loras?: { name: string; strength: number }[];
   /** FLUX.2 only: reference pictures, input tokens, each a ReferenceLatent. */
   refImages?: string[];
+  /** Qwen only: the diffusion model, as ComfyUI lists it. Default: qwenImageDefault(). */
+  qwenModel?: string;
 }
 
 /** Chain LoraLoaderModelOnly nodes after `from`; returns the last model output. */
@@ -70,11 +96,20 @@ function chainLoras(g: Record<string, unknown>, from: [string, number], loras: S
   return model;
 }
 
+const QWEN_LIGHTNING = 'Qwen-Image-Lightning-8steps-V1.0.safetensors';
+
 function qwenGraph(p: StillsParams): Record<string, unknown> {
   const draft = p.quality === 'draft';
+  const name = p.qwenModel || qwenImageDefault();
+  const nunchaku = qwenLoaderFor(name) === 'nunchaku';
   const g0: Record<string, unknown> = {};
+  // A Nunchaku model takes LoRAs only through one stack node (the draft distill first).
+  const stack = [...(draft ? [{ name: QWEN_LIGHTNING, strength: 1 }] : []), ...(p.loras ?? [])];
+  const model: [string, number] = nunchaku
+    ? (stack.length ? ['lora', 0] : ['u', 0])
+    : chainLoras(g0, [draft ? 'lora' : 'u', 0], p.loras);
   const g: Record<string, unknown> = {
-    u: qwenImageLoader(),
+    u: qwenImageLoader(name),
     c: { class_type: 'CLIPLoader', inputs: { clip_name: textEncoder('qwen'), type: 'qwen_image', device: 'default' } },
     v: { class_type: 'VAELoader', inputs: { vae_name: 'qwen_image_vae.safetensors' } },
     pos: { class_type: 'CLIPTextEncode', inputs: { clip: ['c', 0], text: p.prompt } },
@@ -83,7 +118,7 @@ function qwenGraph(p: StillsParams): Record<string, unknown> {
     k: {
       class_type: 'KSampler',
       inputs: {
-        model: chainLoras(g0, [draft ? 'lora' : 'u', 0], p.loras), positive: ['pos', 0], negative: ['neg', 0], latent_image: ['lat', 0],
+        model, positive: ['pos', 0], negative: ['neg', 0], latent_image: ['lat', 0],
         seed: p.seed,
         steps: draft ? 8 : 50,
         cfg: draft ? 1.0 : 2.5,
@@ -93,10 +128,14 @@ function qwenGraph(p: StillsParams): Record<string, unknown> {
     d: { class_type: 'VAEDecode', inputs: { samples: ['k', 0], vae: ['v', 0] } },
     save: { class_type: 'SaveImage', inputs: { images: ['d', 0], filename_prefix: 'OpenField_still' } },
   };
-  if (draft) {
+  if (nunchaku && stack.length) {
+    const inputs: Record<string, unknown> = { model: ['u', 0], lora_count: stack.length, cpu_offload: 'auto', toggle_all: true };
+    stack.forEach((l, i) => Object.assign(inputs, { [`enabled_${i + 1}`]: true, [`lora_name_${i + 1}`]: l.name, [`lora_strength_${i + 1}`]: l.strength }));
+    g.lora = { class_type: NUNCHAKU_LORA_NODE, inputs };
+  } else if (draft) {
     g.lora = {
       class_type: 'LoraLoaderModelOnly',
-      inputs: { model: ['u', 0], lora_name: 'Qwen-Image-Lightning-8steps-V1.0.safetensors', strength_model: 1.0 },
+      inputs: { model: ['u', 0], lora_name: QWEN_LIGHTNING, strength_model: 1.0 },
     };
   }
   return { ...g, ...g0 };

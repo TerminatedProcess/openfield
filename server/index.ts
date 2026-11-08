@@ -21,6 +21,7 @@ import { applyPost } from './graphs/director.js';
 import { advance, cleanScene, getPlan, initScenes, plannerReasoningOverride, postBlockingReason, shootScene, shotsOf, startPlan, waitingCuts } from './scene.js';
 import { buildStillsGraph } from './graphs/stills.js';
 import { listUserLoras, pickLoras, type LoraFamily } from './loras.js';
+import { listQwenModels, pickQwenModel } from './qwenModels.js';
 import { buildDreamGraph, buildRedrawGraph, buildSharpenGraph, redrawBatch, type UpscaleSource } from './graphs/upscale.js';
 import {
   CUTOUT_MAX_SECONDS, DREAM_CREATIVITY, REDRAW_HEIGHTS, REDRAW_MAX_SECONDS, clampEra, cutoutSize, dreamFrames, eraGrade, isRamp, restyleInstruction, restyleLook, restylePrompt,
@@ -740,6 +741,7 @@ async function graphFor(b: any, seed: number): Promise<Built> {
       height: b.height || 752,
       seed,
       loras: await pickLoras(b.loras, flux2 ? 'flux2' : 'qwen', 'Image'),
+      qwenModel: flux2 ? undefined : await pickQwenModel(b.qwenModel, b.quality === 'draft' || (Array.isArray(b.loras) && b.loras.length > 0)),
       // FLUX.2 references: your own pictures first, then the cast's (resolveCast).
       refImages: flux2 ? flux2Refs(b) : undefined,
     });
@@ -1984,6 +1986,9 @@ app.post('/api/cast/hero', async (req, reply) => {
 
 /** Your own LoRAs: every LoRA file the engine sees that no app loads by itself, with its model family. */
 app.get('/api/loras', async () => ({ loras: await listUserLoras().catch(() => []) }));
+
+/** The Qwen-Image models a still can pick (server/qwenModels.ts). */
+app.get('/api/qwen-models', async () => listQwenModels(true).catch(() => ({ models: [], nunchakuLoras: false })));
 
 /** Available checkpoints by model family + the current model card. */
 app.get('/api/models', async () => {

@@ -9,6 +9,7 @@ import { ChipMenu, Clip, Icon, MediaCard, Spill, Stepper, fmtSeconds, presetClip
 import Viewer, { animate, recreate, remove } from '../Viewer';
 import { MentionBox } from '../Mention';
 import { LoraChips, useLoraPicks } from '../Loras';
+import { QwenModelChip, useQwenModel } from '../QwenModel';
 
 /** FLUX.2 reads up to six reference pictures, your own plus any @cast. */
 const MAX_REFS = 6;
@@ -26,6 +27,7 @@ export default function ImagePage() {
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [loras, setLoras] = useLoraPicks(model.id);
+  const [qwenModel, setQwenModel] = useQwenModel();
   const [refs, setRefs] = useState<{ token: string; name: string }[]>([]);
   const refInput = useRef<HTMLInputElement>(null);
   const refsOn = model.id === 'flux2';
@@ -63,6 +65,7 @@ export default function ImagePage() {
         kind: 'still', model: model.id, quality, prompt, userPrompt: prompt, width: size.w, height: size.h, count,
         shotName: prompt.slice(0, 40),
         ...(loras.length ? { loras } : {}),
+        ...(model.id === 'qwen' && qwenModel ? { qwenModel } : {}),
         ...(refsOn && refs.length ? { refImages: refs.map((r) => r.token) } : {}),
       });
       toast(`Queued ${r.takeIds.length} image${r.takeIds.length > 1 ? 's' : ''}`);
@@ -137,6 +140,7 @@ export default function ImagePage() {
                     onChange={(e) => { if (e.target.files) void addRefs(Array.from(e.target.files)); e.target.value = ''; }} />
                 </>
               )}
+              {model.id === 'qwen' && <QwenModelChip value={qwenModel} onChange={setQwenModel} />}
               <LoraChips family={model.id} value={loras} onChange={setLoras} />
             </div>
           </div>
