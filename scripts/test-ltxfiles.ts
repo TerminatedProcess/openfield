@@ -18,6 +18,7 @@ import { LTX25_ENV, LTX25_STOCK, clearLtx25Overrides, ltx25Files, ltx25Overrides
 import { buildLtx25Graph } from '../server/graphs/ltx25.js';
 import { H3_TEXT_ENCODER_ENV } from '../server/graphs/h3.js';
 import { ENCODER_ENV, ENCODER_SLOTS, ENCODER_STOCK, clearEncoderOverrides, textEncoder, type EncoderSlot } from '../server/graphs/encoders.js';
+import { QWEN_IMAGE_ENV, QWEN_IMAGE_STOCK, buildStillsGraph } from '../server/graphs/stills.js';
 import { BUNDLES, activeBundles, type Bundle } from '../server/models.js';
 import { reasonFor, statusFor } from '../server/preflight.js';
 import { ENTRIES, OUT } from './export-workflows.js';
@@ -51,6 +52,7 @@ const setOverrides = () => { for (const s of SLOTS) process.env[LTX25_ENV[s]] = 
 clearLtx25Overrides();
 delete process.env[H3_TEXT_ENCODER_ENV];
 clearEncoderOverrides();
+delete process.env[QWEN_IMAGE_ENV];
 
 // ------------------------------------------------------------ module ----
 console.log('\nltxfiles.ts');
@@ -288,6 +290,36 @@ try {
   });
 } finally {
   clearEncoderOverrides();
+}
+
+// ------------------------------------------------------- Qwen-Image ----
+console.log('\nstills.ts (Qwen-Image diffusion model)');
+
+const qwenStill = () => buildStillsGraph({ model: 'qwen', quality: 'quality', prompt: 'x', width: 1024, height: 1024, seed: 1 }) as Record<string, { class_type: string; inputs: Record<string, unknown> }>;
+
+try {
+  check('Qwen-Image is stock unless OPENFIELD_QWEN_IMAGE_MODEL names another; .gguf loads through UnetLoaderGGUF', () => {
+    assert.deepEqual(qwenStill().u, { class_type: 'UNETLoader', inputs: { unet_name: QWEN_IMAGE_STOCK, weight_dtype: 'default' } });
+    process.env[QWEN_IMAGE_ENV] = ' tune\\qwen-tune_nvfp4.safetensors ';
+    assert.deepEqual(qwenStill().u, { class_type: 'UNETLoader', inputs: { unet_name: 'tune\\qwen-tune_nvfp4.safetensors', weight_dtype: 'default' } });
+    process.env[QWEN_IMAGE_ENV] = 'qwen-tune-Q4_K_M.GGUF';
+    assert.deepEqual(qwenStill().u, { class_type: 'UnetLoaderGGUF', inputs: { unet_name: 'qwen-tune-Q4_K_M.GGUF' } });
+  });
+
+  check('activeBundles() swaps the stock Qwen-Image model everywhere without a download', () => {
+    const ids = BUNDLES.filter((b) => b.files.some((f) => f.file === QWEN_IMAGE_STOCK)).map((b) => b.id);
+    assert.ok(ids.length);
+    const act = activeBundles({ [QWEN_IMAGE_ENV]: 'qwen-tune.gguf' });
+    for (const id of ids) {
+      const files = act.find((b) => b.id === id)!.files;
+      assert.ok(!files.some((f) => f.file === QWEN_IMAGE_STOCK), id);
+      const f = files.find((x) => x.file === 'qwen-tune.gguf')!;
+      assert.equal(f.override, QWEN_IMAGE_ENV);
+      assert.equal(f.gb, 0);
+    }
+  });
+} finally {
+  delete process.env[QWEN_IMAGE_ENV];
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

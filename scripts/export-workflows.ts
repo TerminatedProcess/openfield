@@ -29,6 +29,7 @@ import { buildReshootGraph, buildReshootWarpPreviewGraph } from '../server/graph
 import { buildDreamGraph, buildRedrawGraph, buildSharpenGraph, redrawBatch } from '../server/graphs/upscale.js';
 import { H3_TEXT_ENCODER_ENV, buildH3Graph, snapH3Length } from '../server/graphs/h3.js';
 import { clearEncoderOverrides } from '../server/graphs/encoders.js';
+import { QWEN_IMAGE_ENV } from '../server/graphs/stills.js';
 import { buildLtxGraph } from '../server/graphs/ltx.js';
 import { EFFECTS, effectPrompt } from '../src/effects.js';
 import { buildExtendGraph, buildSoundGraph, buildSpeakGraph, buildTransitionGraph } from '../server/graphs/ltxtools.js';
@@ -574,9 +575,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   // These files are the shared examples in the repo: always the stock LTX-2.5
   // and H3 weights and text encoders, whatever this machine's .env sets
   // (server/graphs/ltxfiles.ts, H3_TEXT_ENCODER_ENV in server/graphs/h3.ts,
-  // server/graphs/encoders.ts).
+  // server/graphs/encoders.ts, QWEN_IMAGE_ENV in server/graphs/stills.ts).
   clearLtx25Overrides();
   delete process.env[H3_TEXT_ENCODER_ENV];
   clearEncoderOverrides();
+  delete process.env[QWEN_IMAGE_ENV];
   writeAll();
 }

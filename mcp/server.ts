@@ -445,16 +445,19 @@ server.registerTool('direct_shot', {
     audio: z.boolean().default(false).describe('Shot mode sound (dropped on ramped shots)'),
     resolution: tierArg('director').describe('Shot mode render size. Default: the machine-wide size from Setup.'),
     count: z.number().int().min(1).max(4).optional().describe('Default 2 frames in frame mode, 1 in shot mode'),
+    loras,
   },
   annotations: GPU,
 }, safe(async (a) => {
   const picks = picksFrom(a as Record<string, unknown>);
+  if (a.mode === 'shot' && a.loras?.length) throw new Error('loras are for mode=frame');
   if (a.mode === 'frame' && a.hero_image) throw new Error('hero_image is for mode=shot');
   if (a.mode === 'frame' && a.ramp !== 'linear') throw new Error('ramp is for mode=shot');
   const hero = a.hero_image ? await resolveInput(a.hero_image, 'image') : undefined;
   const body = directorBody({
     mode: a.mode, scene: a.scene, picks, era: a.era ?? null, grade: a.era_grade, ramp: a.ramp, aspect: a.aspect, count: a.count ?? (a.mode === 'frame' ? 2 : 1),
     imageModel: a.image_model, move: a.move, seconds: a.seconds, audio: a.audio, heroImage: hero?.token, res: await tierFor('director', a.resolution),
+    loras: a.loras as LoraPick[] | undefined,
   });
   return queue(wire(body), { picks, era: a.era ?? null, ramp: a.mode === 'shot' ? a.ramp : undefined });
 }));

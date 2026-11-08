@@ -9,6 +9,7 @@ import { BUNDLES, bundleGb } from '../server/models.js';
 import { LTX25_ENV, LTX25_STOCK, type Ltx25Slot } from '../server/graphs/ltxfiles.js';
 import { H3_MODELS, H3_TEXT_ENCODER_ENV } from '../server/graphs/h3.js';
 import { ENCODER_ENV, ENCODER_SLOTS, ENCODER_STOCK } from '../server/graphs/encoders.js';
+import { QWEN_IMAGE_ENV, QWEN_IMAGE_STOCK } from '../server/graphs/stills.js';
 import { ROOT } from '../server/config.js';
 
 // Shared files (the edit bundle reuses qwen's encoder, VAE and LoRA) count once.
@@ -121,6 +122,16 @@ lines.push(
   '',
   'Put the file in `models/text_encoders/` and give its name as ComfyUI lists it.',
   'It is checked for, never downloaded.',
+  '',  '## Other Qwen-Image models',
+  '',
+  'Qwen-Image stills can run another Qwen-Image diffusion model, for example a',
+  'fine-tune or another quantization. Put it in `models/diffusion_models/` and set',
+  'the variable to its name as ComfyUI lists it. A `.gguf` file loads through',
+  'ComfyUI-GGUF (`UnetLoaderGGUF`). It is checked for, never downloaded.',
+  '',
+  '| Variable | Replaces | Bundles |',
+  '| --- | --- | --- |',
+  `| \`${QWEN_IMAGE_ENV}\` | \`${QWEN_IMAGE_STOCK}\` | ${bundlesWith(QWEN_IMAGE_STOCK)} |`,
   '',
 );
 

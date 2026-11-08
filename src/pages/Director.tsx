@@ -20,6 +20,7 @@ import { secondsToFrames } from '../presets';
 import Viewer, { recreate, remove } from '../Viewer';
 import { MentionBox } from '../Mention';
 import { useCast } from '../castStore';
+import { LoraChips, useLoraPicks } from '../Loras';
 
 type Picks = Record<string, string>;
 type Mode = 'image' | 'video' | 'scene';
@@ -41,6 +42,7 @@ export default function DirectorPage() {
   const [aspect, setAspect] = useState<AspectId>('16:9');
   const [count, setCount] = useState(mode === 'image' ? 2 : 1);
   const [imageModel, setImageModel] = useState<'qwen' | 'flux2'>('qwen');
+  const [loras, setLoras] = useLoraPicks(imageModel);
   const [move, setMove] = useState('push-in');
   const [seconds, setSeconds] = useState(5);
   const [audio, setAudio] = useState(false);
@@ -119,7 +121,7 @@ export default function DirectorPage() {
     try {
       const common = { app: 'director', scene, picks, era, eraGrade: grade, userPrompt: scene || compiled, prompt: compiled, width: size.w, height: size.h, count, shotName: (scene || 'director').slice(0, 40) };
       const r = mode === 'image'
-        ? await api.generate({ ...common, kind: 'still', model: imageModel, quality: 'quality' })
+        ? await api.generate({ ...common, kind: 'still', model: imageModel, quality: 'quality', ...(loras.length ? { loras } : {}) })
         : await api.generate({ ...common, kind: 'video', videoModel: 'h3', seconds, lengthFrames: secondsToFrames(seconds), withAudio: audio, startImage: hero?.token, preset: move, presetName: presetById(move).name, ramp });
       toast(`Queued ${r.takeIds.length} ${mode === 'image' ? 'frame' : 'shot'}${r.takeIds.length > 1 ? 's' : ''}`);
     } catch (e) {
@@ -321,6 +323,7 @@ export default function DirectorPage() {
               {mode === 'video' && <TierChip app="director" value={res} onChange={setRes} />}
               <Stepper value={count} min={1} max={4} onChange={setCount} fmt={(v) => `${v}/4`} />
               {mode === 'video' && <span className="chip" style={{ gap: 10 }}><Icon name="audio" size={14} />Sound <Switch on={audio && ramp === 'linear'} onChange={setAudio} label="sound" /></span>}
+              {mode === 'image' && <LoraChips family={imageModel} value={loras} onChange={setLoras} />}
             </div>
             <button type="button" className="generate" style={{ marginTop: 'auto' }} disabled={busy || !canGo} onClick={() => void go()}>
               <span>{busy ? 'Queuing...' : mode === 'image' ? 'Make frames' : 'Shoot'}</span>

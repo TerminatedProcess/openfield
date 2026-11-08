@@ -17,6 +17,28 @@
 
 import { textEncoder } from './encoders.js';
 
+/** The Qwen-Image diffusion model the qwen bundle ships. */
+export const QWEN_IMAGE_STOCK = 'qwen_image_fp8_e4m3fn.safetensors';
+/**
+ * Another Qwen-Image diffusion model in models/diffusion_models/ (a fine-tune,
+ * another quantization), named as ComfyUI lists it. A .gguf name loads through
+ * ComfyUI-GGUF's UnetLoaderGGUF. Checked for, never downloaded.
+ */
+export const QWEN_IMAGE_ENV = 'OPENFIELD_QWEN_IMAGE_MODEL';
+
+/** The configured Qwen-Image model, or '' when the stock one is in use. */
+export function qwenImageOverride(env: NodeJS.ProcessEnv = process.env): string {
+  return (env[QWEN_IMAGE_ENV] ?? '').trim();
+}
+
+/** The loader node for the Qwen-Image model the stills graph runs. */
+export function qwenImageLoader(env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+  const name = qwenImageOverride(env) || QWEN_IMAGE_STOCK;
+  return /\.gguf$/i.test(name)
+    ? { class_type: 'UnetLoaderGGUF', inputs: { unet_name: name } }
+    : { class_type: 'UNETLoader', inputs: { unet_name: name, weight_dtype: 'default' } };
+}
+
 export interface StillsParams {
   model: 'qwen' | 'flux2';
   quality: 'draft' | 'quality';
@@ -52,7 +74,7 @@ function qwenGraph(p: StillsParams): Record<string, unknown> {
   const draft = p.quality === 'draft';
   const g0: Record<string, unknown> = {};
   const g: Record<string, unknown> = {
-    u: { class_type: 'UNETLoader', inputs: { unet_name: 'qwen_image_fp8_e4m3fn.safetensors', weight_dtype: 'default' } },
+    u: qwenImageLoader(),
     c: { class_type: 'CLIPLoader', inputs: { clip_name: textEncoder('qwen'), type: 'qwen_image', device: 'default' } },
     v: { class_type: 'VAELoader', inputs: { vae_name: 'qwen_image_vae.safetensors' } },
     pos: { class_type: 'CLIPTextEncode', inputs: { clip: ['c', 0], text: p.prompt } },

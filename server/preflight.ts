@@ -61,7 +61,13 @@ async function seenByFolder(): Promise<Record<string, Set<string>>> {
   const lists = await Promise.all(
     dirs.map(async (d) => {
       const folder = FOLDER[d];
-      return new Set(folder ? await listModelFolder(folder) : await comboOptions(...LOADER[d]!));
+      if (folder) return new Set(await listModelFolder(folder));
+      // .gguf diffusion models (OPENFIELD_QWEN_IMAGE_MODEL) are listed by ComfyUI-GGUF's loader.
+      const [own, gguf] = await Promise.all([
+        comboOptions(...LOADER[d]!),
+        d === 'diffusion_models' ? comboOptions('UnetLoaderGGUF', 'unet_name') : [],
+      ]);
+      return new Set([...own, ...gguf]);
     })
   );
   return Object.fromEntries(dirs.map((d, i) => [d, lists[i]]));

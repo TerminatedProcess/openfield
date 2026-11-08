@@ -170,6 +170,7 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
   const { directorDirection } = catalog;
   for (const c of [
     { name: 'director frame, picks', mode: 'frame', scene: 'a lighthouse keeper climbs the stairs with a lantern as the storm hits', picks: { camera: 'anamorphic', light: 'candle', film: '500t', grade: 'teal' }, era: null, grade: true, ramp: 'linear', aspect: '21:9', count: 2, imageModel: 'qwen', move: 'push-in', seconds: 5, audio: false, res: '480p' },
+    { name: 'director frame with loras', mode: 'frame', scene: 'two figures by a door at night', picks: { light: 'candle' }, era: null, grade: true, ramp: 'linear', aspect: '16:9', count: 2, imageModel: 'qwen', move: 'push-in', seconds: 5, audio: false, res: '480p', loras: [{ name: 'a.safetensors', strength: 0.8 }] },
     { name: 'director frame, no scene, era graded', mode: 'frame', scene: '', picks: { look: 'noir' }, era: 1962, grade: true, ramp: 'linear', aspect: '1:1', count: 4, imageModel: 'flux2', move: 'push-in', seconds: 5, audio: false, res: '720p' },
     { name: 'director shot from hero, genre + era prompt only', mode: 'shot', scene: 'the keeper reaches the lamp room', picks: { ...catalog.pickGenre({}, 'noir'), framing: 'low' }, era: 1974, grade: false, ramp: 'linear', aspect: '16:9', count: 1, imageModel: 'qwen', move: 'crane-up', seconds: 8, audio: true, hero: { token: 'hero.png', take: 7 }, res: '720p' },
     { name: 'director shot from text, bullet time, 480p', mode: 'shot', scene: 'a fox crosses a frozen lake', picks: {}, era: 2003, grade: true, ramp: 'bullet', aspect: '9:16', count: 2, imageModel: 'qwen', move: 'whip-pan', seconds: 3, audio: false, res: '480p' },
@@ -178,13 +179,14 @@ const { VIDEO_MODELS, IMAGE_MODELS, IMAGE_RES, compilePrompt, presetById, sizeFo
     const mode = c.mode === 'frame' ? 'image' : 'video'; // the page's names
     const picks = c.picks as Record<string, string>;
     const hero = 'hero' in c ? c.hero : null;
+    const loras = 'loras' in c && c.loras ? [...c.loras] : [];
     const direction = expr(dirSrc, { directorDirection, picks, era: c.era });
     const moveText = expr(moveSrc, { mode, presetById, move: c.move });
     const compiled = compilePrompt([moveText, c.scene, direction.join(', ')]);
     const size = expr(sizeSrc, { mode, sizeFor, aspect: c.aspect, videoFrame, res: appTier('director', c.res) });
     const common = expr(commonSrc, { scene: c.scene, picks, era: c.era, grade: c.grade, compiled, size, count: c.count });
-    const oracle = expr(mode === 'image' ? m![1] : m![2], { common, imageModel: c.imageModel, seconds: c.seconds, audio: c.audio, hero, move: c.move, presetById, ramp: c.ramp, secondsToFrames });
-    const mine = directorBody({ mode: c.mode, scene: c.scene, picks, era: c.era, grade: c.grade, ramp: c.ramp, aspect: c.aspect, count: c.count, imageModel: c.imageModel, move: c.move, seconds: c.seconds, audio: c.audio, heroImage: hero?.token, res: c.res });
+    const oracle = expr(mode === 'image' ? m![1] : m![2], { common, loras, imageModel: c.imageModel, seconds: c.seconds, audio: c.audio, hero, move: c.move, presetById, ramp: c.ramp, secondsToFrames });
+    const mine = directorBody({ mode: c.mode, scene: c.scene, picks, era: c.era, grade: c.grade, ramp: c.ramp, aspect: c.aspect, count: c.count, imageModel: c.imageModel, move: c.move, seconds: c.seconds, audio: c.audio, heroImage: hero?.token, res: c.res, ...(loras.length ? { loras } : {}) });
     same(c.name, mine, oracle);
   }
   // Genre through MCP: withGenre fills the axes the genre sets, explicit picks win.

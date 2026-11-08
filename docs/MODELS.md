@@ -416,3 +416,14 @@ one it replaces. Every bundle that holds the stock file uses the configured one.
 
 Put the file in `models/text_encoders/` and give its name as ComfyUI lists it.
 It is checked for, never downloaded.
+
+## Other Qwen-Image models
+
+Qwen-Image stills can run another Qwen-Image diffusion model, for example a
+fine-tune or another quantization. Put it in `models/diffusion_models/` and set
+the variable to its name as ComfyUI lists it. A `.gguf` file loads through
+ComfyUI-GGUF (`UnetLoaderGGUF`). It is checked for, never downloaded.
+
+| Variable | Replaces | Bundles |
+| --- | --- | --- |
+| `OPENFIELD_QWEN_IMAGE_MODEL` | `qwen_image_fp8_e4m3fn.safetensors` | `qwen` |

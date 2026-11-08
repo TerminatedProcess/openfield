@@ -22,6 +22,7 @@
 import { LTX25_ENV, LTX25_STOCK, ltx25Overrides, type Ltx25Slot } from './graphs/ltxfiles.js';
 import { H3_MODELS, H3_TEXT_ENCODER_ENV, h3TextEncoderOverride } from './graphs/h3.js';
 import { ENCODER_ENV, ENCODER_SLOTS, ENCODER_STOCK, encoderOverride } from './graphs/encoders.js';
+import { QWEN_IMAGE_ENV, QWEN_IMAGE_STOCK, qwenImageOverride } from './graphs/stills.js';
 
 export interface ModelFile {
   /** Filename ComfyUI must see. Referenced verbatim by a graph builder. */
@@ -480,8 +481,8 @@ export const bundleGb = (b: Bundle): number =>
 
 /**
  * The bundles as this install runs them: a stock file that an
- * OPENFIELD_LTX25_* variable, OPENFIELD_H3_TEXT_ENCODER or a text encoder
- * variable from server/graphs/encoders.ts replaces is swapped
+ * OPENFIELD_LTX25_* variable, OPENFIELD_H3_TEXT_ENCODER, a text encoder
+ * variable from server/graphs/encoders.ts or OPENFIELD_QWEN_IMAGE_MODEL replaces is swapped
  * for the configured file, so preflight checks for the file the graphs actually
  * load and the installer does not fetch the stock one in its place. Without overrides this returns
  * BUNDLES unchanged. BUNDLES itself always holds the stock files: docs/MODELS.md
@@ -498,6 +499,8 @@ export function activeBundles(env: NodeJS.ProcessEnv = process.env): Bundle[] {
     const file = encoderOverride(s, env);
     if (file) swaps.set(ENCODER_STOCK[s], { file, env: ENCODER_ENV[s] });
   }
+  const qwenImage = qwenImageOverride(env);
+  if (qwenImage) swaps.set(QWEN_IMAGE_STOCK, { file: qwenImage, env: QWEN_IMAGE_ENV });
   if (!swaps.size) return BUNDLES;
   return BUNDLES.map((b) => {
     if (!b.files.some((f) => swaps.has(f.file))) return b;

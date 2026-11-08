@@ -144,6 +144,8 @@ export interface DirectorOpts {
   heroImage?: string;
   /** Shot mode render size (the page's size chip). */
   res: RenderTier;
+  /** Frame mode: your own LoRAs for the image model. */
+  loras?: LoraPick[];
 }
 
 function checkPicks(picks: DirectorPicks, skip: string[] = []) {
@@ -184,9 +186,10 @@ export function directorBody(o: DirectorOpts): Body {
   if (!compiled) throw new Error('Write the scene or pick a direction.');
   const size = o.mode === 'frame' ? sizeFor(o.aspect, 1.0) : videoFrame(o.aspect, appTier('director', o.res));
   const { scene, picks, count } = o;
+  const loras = o.loras ?? [];
   const common = { app: 'director', scene, picks, era, eraGrade: o.grade ?? true, userPrompt: scene || compiled, prompt: compiled, width: size.w, height: size.h, count, shotName: (scene || 'director').slice(0, 40) };
   return o.mode === 'frame'
-    ? { ...common, kind: 'still', model: o.imageModel, quality: 'quality' }
+    ? { ...common, kind: 'still', model: o.imageModel, quality: 'quality', ...(loras.length ? { loras } : {}) }
     : { ...common, kind: 'video', videoModel: 'h3', seconds: o.seconds, lengthFrames: secondsToFrames(o.seconds), withAudio: o.audio, startImage: o.heroImage, preset: o.move, presetName: presetById(o.move).name, ramp: o.ramp ?? 'linear' };
 }
 
